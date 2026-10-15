@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_screen"
+    android:orientation="vertical"
+    android:paddingHorizontal="24dp"
+    android:paddingTop="20dp"
+    android:paddingBottom="20dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/stepProgress"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            app:indicatorColor="@color/accent"
+            app:trackColor="@color/stroke"
+            app:trackCornerRadius="3dp"
+            app:trackThickness="5dp" />
+
+        <TextView
+            android:id="@+id/stepCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="@color/text_dim"
+            android:textSize="12sp"
+            tools:text="2 / 6" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingTop="24dp">
+
+            <com.jarvis.assistant.ui.ArcReactorView
+                android:id="@+id/reactor"
+                android:layout_width="96dp"
+                android:layout_height="96dp" />
+
+            <ImageView
+                android:id="@+id/stepIcon"
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:layout_marginTop="24dp"
+                android:background="@drawable/bg_icon_circle"
+                android:padding="22dp"
+                app:tint="@color/accent"
+                tools:ignore="ContentDescription"
+                tools:src="@drawable/ic_mic" />
+
+            <TextView
+                android:id="@+id/stepTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:textColor="@color/text"
+                android:textSize="22sp"
+                tools:text="Let Jarvis hear you" />
+
+            <TextView
+                android:id="@+id/stepBody"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:lineSpacingExtra="4dp"
+                android:textColor="@color/text_dim"
+                android:textSize="15sp"
+                tools:text="Jarvis needs the microphone to hear “Hey Jarvis” and your commands." />
+
+            <LinearLayout
+                android:id="@+id/stepExtra"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/stepDone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_pill"
+                android:drawablePadding="6dp"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="6dp"
+                android:text="Done"
+                android:textColor="@color/ok"
+                android:visibility="gone"
+                app:drawableStartCompat="@drawable/ic_check"
+                app:drawableTint="@color/ok"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+    </ScrollView>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/primaryButton"
+        style="@style/Jarvis.PrimaryButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        tools:text="Allow microphone" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/skipButton"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/text_dim"
+        tools:text="Skip for now" />
+</LinearLayout>

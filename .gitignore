@@ -1,0 +1,25 @@
+# Build output
+build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+
+# Local machine settings
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+
+# Downloaded by the build (see app/build.gradle.kts)
+app/libs/*.aar
+app/libs/*.part
+
+# Signing keys: never commit these
+*.jks
+*.keystore
+
+# Optional native engine and models for RealEngineTest (see CONTRIBUTING.md)
+/test-native/*
+!/test-native/README.md

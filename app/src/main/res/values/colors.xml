@@ -1,0 +1,15 @@
+<resources>
+    <color name="bg">#0F0F10</color>
+    <color name="surface">#18181A</color>
+    <color name="surface_high">#222225</color>
+    <color name="stroke">#2C2C30</color>
+    <color name="accent">#F2F2F2</color>
+    <color name="on_accent">#111112</color>
+    <color name="accent_dim">#66F2F2F2</color>
+    <color name="accent_faint">#1FF2F2F2</color>
+    <color name="text">#F2F2F2</color>
+    <color name="text_dim">#8E8E93</color>
+    <color name="ok">#5FBF7F</color>
+    <color name="warn">#D9A44A</color>
+    <color name="danger">#E5534B</color>
+</resources>

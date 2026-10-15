@@ -1,0 +1,3 @@
+<resources>
+    <string name="accessibility_description">Lets Jarvis read what is on the screen and tap, type and scroll for you when you give it a voice command. Screen contents are sent to the AI provider you choose in the Jarvis app.</string>
+</resources>

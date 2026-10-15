@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:orientation="vertical"
+        android:paddingHorizontal="18dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="24dp">
+
+        <TextView
+            style="@style/Jarvis.PageTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            tools:ignore="HardcodedText" />
+
+        <!-- Voice -->
+        <TextView
+            style="@style/Jarvis.Section"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Voice"
+            tools:ignore="HardcodedText" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Jarvis.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/engineChips"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:selectionRequired="true"
+                    app:singleSelection="true" />
+
+                <LinearLayout
+                    android:id="@+id/kokoroSection"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:id="@+id/kokoroRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="Voice: George and Lewis sound most like the films"
+                        android:textColor="@color/text_dim"
+                        android:textSize="12sp"
+                        tools:ignore="HardcodedText" />
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/voiceChips"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        app:selectionRequired="true"
+                        app:singleSelection="true" />
+
+                    <TextView
+                        android:id="@+id/speedLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:textColor="@color/text_dim"
+                        android:textSize="12sp"
+                        tools:text="Speed 1.0×" />
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/speed"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:stepSize="0.05"
+                        android:valueFrom="0.7"
+                        android:valueTo="1.5"
+                        app:labelBehavior="gone"
+                        app:tickVisible="false"
+                        app:thumbColor="@color/accent"
+                        app:trackColorActive="@color/accent"
+                        app:trackColorInactive="@color/stroke" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/previewButton"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="6dp"
+                    android:text="Preview voice"
+                    app:cornerRadius="12dp"
+                    app:icon="@drawable/ic_play"
+                    app:iconGravity="textStart"
+                    tools:ignore="HardcodedText" />
+
+                <TextView
+                    android:id="@+id/voiceError"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/danger"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Wake word -->
+        <TextView
+            style="@style/Jarvis.Section"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Listening"
+            tools:ignore="HardcodedText" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Jarvis.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/wakeRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/wakeSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Listen for &quot;Hey Jarvis&quot;"
+                    android:textColor="@color/text"
+                    tools:ignore="HardcodedText" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/bootSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Start when the phone turns on"
+                    android:textColor="@color/text"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Permissions -->
+        <TextView
+            style="@style/Jarvis.Section"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Permissions"
+            tools:ignore="HardcodedText" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Jarvis.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:id="@+id/permissionRows"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- About you -->
+        <TextView
+            style="@style/Jarvis.Section"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="About you"
+            tools:ignore="HardcodedText" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Jarvis.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Jarvis.Field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="0dp"
+                    android:hint="Things Jarvis should know about you"
+                    app:helperText="e.g. My wife is saved as &quot;Amaka ❤️&quot; in WhatsApp"
+                    app:helperTextTextColor="@color/text_dim">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/notes"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="top"
+                        android:inputType="textMultiLine|textCapSentences"
+                        android:minLines="3" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/islandSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Show the task island at the top while Jarvis works"
+                    android:textColor="@color/text"
+                    tools:ignore="HardcodedText" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/screenshotSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Let vision models see screenshots"
+                    android:textColor="@color/text"
+                    tools:ignore="HardcodedText" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Jarvis.Field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Max steps per task">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/maxSteps"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/rerunSetup"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Run the setup walkthrough again"
+            android:textColor="@color/accent"
+            tools:ignore="HardcodedText" />
+    </LinearLayout>
+</ScrollView>

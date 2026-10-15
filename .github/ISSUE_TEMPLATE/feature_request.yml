@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an idea for Jarvis
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like Jarvis to do?
+      description: Describe the problem or situation, not just the solution.
+      placeholder: I'd like to say "Hey Jarvis, what's on my calendar?" and hear today's events.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How might it work?
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself

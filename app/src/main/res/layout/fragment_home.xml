@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:orientation="vertical"
+        android:paddingHorizontal="18dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="24dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/Jarvis.PageTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Jarvis"
+                    tools:ignore="HardcodedText" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/modelPill"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:drawablePadding="2dp"
+                android:ellipsize="end"
+                android:gravity="center_vertical"
+                android:maxWidth="150dp"
+                android:maxLines="1"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="6dp"
+                android:textColor="@color/text_dim"
+                android:textSize="14sp"
+                app:drawableEndCompat="@drawable/ic_chevron"
+                app:drawableTint="@color/text_dim"
+                tools:text="Claude" />
+        </LinearLayout>
+
+        <!-- Shown after a crash, so the user can send the report -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/crashCard"
+            style="@style/Jarvis.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:visibility="gone"
+            app:contentPadding="14dp"
+            app:strokeColor="@color/danger"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Jarvis closed unexpectedly last time. Sharing the report helps get it fixed."
+                    android:textColor="@color/text"
+                    android:textSize="14sp"
+                    tools:ignore="HardcodedText" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="end"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/crashDismiss"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Dismiss"
+                        android:textColor="@color/text_dim"
+                        tools:ignore="HardcodedText" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/crashShare"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="Share report"
+                        tools:ignore="HardcodedText" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Shown until required setup is complete -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/setupBanner"
+            style="@style/Jarvis.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            app:contentPadding="14dp"
+            app:strokeColor="@color/warn"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_bolt"
+                    app:tint="@color/warn"
+                    tools:ignore="ContentDescription" />
+
+                <TextView
+                    android:id="@+id/setupBannerText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:textColor="@color/text"
+                    android:textSize="14sp"
+                    tools:text="2 setup steps left. Tap to finish." />
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron"
+                    app:tint="@color/text_dim"
+                    tools:ignore="ContentDescription" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.jarvis.assistant.ui.ArcReactorView
+            android:id="@+id/reactor"
+            android:layout_width="180dp"
+            android:layout_height="180dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="40dp" />
+
+        <TextView
+            android:id="@+id/statusLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:textColor="@color/text"
+            android:textSize="20sp"
+            tools:text="Ready" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:lineSpacingExtra="2dp"
+            android:paddingHorizontal="12dp"
+            android:textColor="@color/text_dim"
+            android:textSize="15sp"
+            tools:text="Say &quot;Hey Jarvis&quot;" />
+
+        <TextView
+            android:id="@+id/lastResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:paddingHorizontal="16dp"
+            android:textColor="@color/text_dim"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/powerButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="32dp"
+            android:fontFamily="sans-serif-medium"
+            android:textSize="15sp"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_power"
+            app:iconGravity="textStart"
+            tools:text="Turn on" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/abortButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="10dp"
+            android:text="Abort current task"
+            android:textColor="@color/warn"
+            android:visibility="gone"
+            app:cornerRadius="12dp"
+            app:icon="@drawable/ic_stop"
+            app:iconGravity="textStart"
+            app:iconTint="@color/warn"
+            app:strokeColor="@color/warn"
+            tools:ignore="HardcodedText" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_command"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="6dp">
+
+            <EditText
+                android:id="@+id/commandInput"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@null"
+                android:hint="Type a command…"
+                android:imeOptions="actionSend"
+                android:importantForAutofill="no"
+                android:inputType="textCapSentences"
+                android:textColor="@color/text"
+                android:textColorHint="@color/text_dim"
+                android:textSize="15sp"
+                tools:ignore="HardcodedText" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/talkButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="Talk"
+                app:icon="@drawable/ic_mic"
+                app:iconTint="@color/text_dim"
+                tools:ignore="HardcodedText" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sendButton"
+                style="@style/Widget.Material3.Button.IconButton.Filled"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:contentDescription="Run command"
+                app:icon="@drawable/ic_send"
+                tools:ignore="HardcodedText" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center"
+            android:text="Try “Hey Jarvis, text Mum I’m on my way”"
+            android:textColor="@color/text_dim"
+            android:textSize="12sp"
+            tools:ignore="HardcodedText" />
+    </LinearLayout>
+</ScrollView>

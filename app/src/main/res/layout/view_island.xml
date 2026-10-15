@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "task island": a small pill at the top of the screen while Jarvis works. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/island"
+    android:layout_width="wrap_content"
+    android:layout_height="38dp"
+    android:animateLayoutChanges="true"
+    android:background="@drawable/bg_island"
+    android:gravity="center_vertical"
+    android:minWidth="120dp"
+    android:orientation="horizontal"
+    android:paddingStart="6dp"
+    android:paddingEnd="14dp">
+
+    <com.jarvis.assistant.ui.ArcReactorView
+        android:id="@+id/islandReactor"
+        android:layout_width="28dp"
+        android:layout_height="28dp" />
+
+    <ImageView
+        android:id="@+id/islandResult"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:layout_marginStart="3dp"
+        android:layout_marginEnd="3dp"
+        android:src="@drawable/ic_check"
+        android:visibility="gone"
+        app:tint="@color/ok"
+        tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/islandText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:ellipsize="end"
+        android:maxWidth="230dp"
+        android:maxLines="1"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        tools:text="Opening WhatsApp…" />
+
+    <ImageView
+        android:id="@+id/islandStop"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_marginStart="10dp"
+        android:background="@drawable/bg_island_stop"
+        android:contentDescription="Stop task"
+        android:padding="7dp"
+        android:src="@drawable/ic_stop"
+        android:visibility="gone"
+        app:tint="@color/danger"
+        tools:ignore="HardcodedText" />
+</LinearLayout>

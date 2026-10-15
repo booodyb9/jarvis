@@ -51,6 +51,8 @@ cd ../..
 ./gradlew testDebugUnitTest -Preal
 ```
 
+The real-engine tests also cover conversation: Jarvis's own echo must never interrupt it, talking over it or saying "stop" must, and a follow-up must work without the wake word. To measure wake word accuracy for quiet, far-away speech (about 10 minutes), run `JARVIS_TUNING=1 ./gradlew testDebugUnitTest -Preal --tests '*RealEngineTestTuning*'`.
+
 ## Pull requests
 
 1. Fork the repo and create a branch from `master`, e.g. `fix/battery-step-xiaomi` or `feat/custom-wake-word`.

@@ -7,6 +7,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import com.jarvis.assistant.CLOUD_VOICES
+import com.jarvis.assistant.CloudVoiceConfig
 import com.jarvis.assistant.KOKORO_VOICES
 import com.jarvis.assistant.Settings
 import com.jarvis.assistant.databinding.FragmentSettingsBinding
@@ -28,10 +30,12 @@ class SettingsFragment : Fragment() {
         val activity = requireActivity()
 
         // Voice
-        ui.engineChips.addChoice("Kokoro · natural", "kokoro")
+        ui.engineChips.addChoice("Kokoro · on phone", "kokoro")
         ui.engineChips.addChoice("System voice", "system")
+        CLOUD_VOICES.forEach { ui.engineChips.addChoice(it.name, it.id) }
         ui.engineChips.select(settings.voiceEngine)
         ui.engineChips.setOnCheckedStateChangeListener { _, _ ->
+            saveCloudFields()
             settings.voiceEngine = ui.engineChips.selectedTag ?: "kokoro"
             showVoiceSection()
         }
@@ -59,6 +63,11 @@ class SettingsFragment : Fragment() {
         ui.bootSwitch.isChecked = settings.startOnBoot
         ui.wakeSwitch.setOnCheckedChangeListener { _, v -> settings.wakeWordEnabled = v }
         ui.bootSwitch.setOnCheckedChangeListener { _, v -> settings.startOnBoot = v }
+        ui.bargeSwitch.isChecked = settings.interruptByTalking
+        ui.bargeSwitch.setOnCheckedChangeListener { _, v -> settings.interruptByTalking = v }
+        ui.followUpSwitch.isChecked = settings.followUp
+        ui.followUpSwitch.setOnCheckedChangeListener { _, v -> settings.followUp = v }
+
 
         // Permissions
         refreshers += Setup.bindRows(activity, ui.permissionRows, listOf(Setup.Item.MICROPHONE, Setup.Item.PHONE_CONTROL, Setup.Item.BACKGROUND))
@@ -89,6 +98,7 @@ class SettingsFragment : Fragment() {
         Downloads.unlisten(onDownload)
         if (_ui == null) return
         if (settings.voiceEngine == "kokoro") Kokoro.prerender(requireContext(), settings.kokoroSpeaker, settings.voiceSpeed)
+        saveCloudFields()
         settings.personalNotes = ui.notes.text.toString()
         settings.maxSteps = ui.maxSteps.text.toString().toIntOrNull()?.coerceIn(5, 200) ?: 40
     }
@@ -101,17 +111,57 @@ class SettingsFragment : Fragment() {
         _ui = null
     }
 
+    /** The cloud voice whose settings are in the fields right now, if any. */
+    private var shownCloud: String? = null
+
     private fun showVoiceSection() {
-        ui.kokoroSection.visibility = if (settings.voiceEngine == "kokoro") View.VISIBLE else View.GONE
+        val engine = settings.voiceEngine
+        ui.kokoroSection.visibility = if (engine == "kokoro") View.VISIBLE else View.GONE
+        val preset = CLOUD_VOICES.firstOrNull { it.id == engine }
+        ui.cloudSection.visibility = if (preset != null) View.VISIBLE else View.GONE
+        ui.voiceError.visibility = View.GONE
+        shownCloud = preset?.id
+        if (preset == null) return
+        val config = settings.cloudVoice(preset.id)
+        ui.cloudHint.text = preset.keyHint
+        ui.cloudKeyLayout.hint = if (preset.needsKey) "API key" else "API key (optional)"
+        ui.cloudKey.setText(config.apiKey)
+        ui.cloudVoice.setText(config.voice)
+        ui.cloudVoiceHint.text = preset.voiceHint
+        ui.cloudModel.setText(config.model)
+        ui.cloudUrl.setText(config.baseUrl)
+        ui.cloudUrlLayout.visibility = if (preset.editableUrl) View.VISIBLE else View.GONE
+    }
+
+    private fun saveCloudFields() {
+        val id = shownCloud ?: return
+        val ui = _ui ?: return
+        val preset = CLOUD_VOICES.first { it.id == id }
+        settings.saveCloudVoice(CloudVoiceConfig(
+            id = id,
+            apiKey = ui.cloudKey.text.toString(),
+            model = ui.cloudModel.text.toString().ifBlank { preset.defaultModel },
+            voice = ui.cloudVoice.text.toString(),
+            baseUrl = if (preset.editableUrl) ui.cloudUrl.text.toString().ifBlank { preset.defaultBaseUrl } else preset.defaultBaseUrl,
+        ))
     }
 
     private fun speedText(v: Float) = "Speed %.2f×".format(v)
 
     private fun previewVoice() {
+        saveCloudFields()
+        val cloud = CLOUD_VOICES.firstOrNull { it.id == settings.voiceEngine }
+        if (cloud != null && cloud.needsKey && settings.cloudVoice(cloud.id).apiKey.isBlank()) {
+            Toast.makeText(requireContext(), "Add your ${cloud.name} API key first.", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (settings.voiceEngine == "kokoro" && !Kokoro.isInstalled(requireContext())) {
             Toast.makeText(requireContext(), "Download the Kokoro voice first. Playing the system voice for now.", Toast.LENGTH_SHORT).show()
         }
-        val voice = KOKORO_VOICES.firstOrNull { it.sid == settings.kokoroSpeaker }?.name ?: "Jarvis"
+        val voice = when {
+            cloud != null -> "${cloud.name}"
+            else -> KOKORO_VOICES.firstOrNull { it.sid == settings.kokoroSpeaker }?.name ?: "Jarvis"
+        }
         ui.previewButton.isEnabled = false
         ui.previewButton.text = "Speaking…"
         val speaker = preview ?: Speaker(requireContext()).also { preview = it }
@@ -119,9 +169,10 @@ class SettingsFragment : Fragment() {
             _ui?.let {
                 it.previewButton.isEnabled = true
                 it.previewButton.text = "Preview voice"
-                // If Kokoro had a problem, say so here rather than failing silently.
-                it.voiceError.visibility = if (Kokoro.lastError != null) View.VISIBLE else View.GONE
-                it.voiceError.text = "Kokoro problem: ${Kokoro.lastError}"
+                // If the voice had a problem, say so here rather than failing silently.
+                val error = speaker.lastError
+                it.voiceError.visibility = if (error != null) View.VISIBLE else View.GONE
+                it.voiceError.text = if (cloud != null) "$error\nPlayed the backup voice instead." else "Kokoro problem: $error"
             }
         }
     }

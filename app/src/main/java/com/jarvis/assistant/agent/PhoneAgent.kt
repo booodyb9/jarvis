@@ -31,7 +31,18 @@ class PhoneAgent(private val settings: Settings, private val host: AgentHost) {
     /** Short log of actions taken, so a fallback model can pick up where the last one stopped. */
     private val actionLog = mutableListOf<String>()
 
-    fun run(task: String): AgentResult {
+    /** What was asked and answered just before, so follow-ups ("and tell her I'll be late") make sense. */
+    private var earlier = ""
+
+    /**
+     * Carries out [task]. [conversation] holds the previous requests and replies in this conversation
+     * (oldest first), used only to understand references like "her" or "that one".
+     */
+    fun run(task: String, conversation: List<Pair<String, String>> = emptyList()): AgentResult {
+        earlier = if (conversation.isEmpty()) "" else
+            "Earlier in this conversation (oldest first):\n" +
+                conversation.joinToString("\n") { (asked, replied) -> "- The person asked: \"$asked\". You replied: \"$replied\"" } +
+                "\nUse this only to understand what the new request refers to. Don't redo earlier tasks.\n\n"
         val a11y = JarvisAccessibilityService.instance
             ?: return AgentResult(false, "I can't control the phone yet. Please turn on phone control in the Jarvis app.")
         val models = settings.modelsInOrder().let { if (settings.fallbackEnabled) it else it.take(1) }
@@ -64,7 +75,7 @@ class PhoneAgent(private val settings: Settings, private val host: AgentHost) {
             "\n\nAnother assistant started this task and was interrupted. It already did these actions, in order:\n" +
                 actionLog.joinToString("\n") { "- $it" } + "\nCheck the current screen and continue from there; don't repeat anything already done (for example, don't send a message twice)."
         } else ""
-        var userText: String? = "Task: $task$handover\n\n${observe(a11y)}"
+        var userText: String? = "${earlier}Task: $task$handover\n\n${observe(a11y)}"
         var outputs = emptyList<ToolOutput>()
         var nudges = 0
 

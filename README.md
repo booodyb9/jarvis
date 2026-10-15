@@ -54,12 +54,13 @@ Phone assistants can answer questions, but most of them can't use your apps for 
 
 ## Features
 
-### Voice, on the phone
+### Voice and conversation
 - **"Hey Jarvis" wake word.** Offline keyword spotting with [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), so no audio leaves the phone while it waits.
+- **Talk naturally.** Talk over Jarvis to interrupt it, or just say "stop". After it answers, carry on without the wake word ("...and tell her I'll be late"); it remembers the last few exchanges. Say "Hey Jarvis" during a task to stop or redirect it.
 - **One-breath commands.** "Hey Jarvis, turn on the flashlight" works without waiting for a prompt. If you pause after "Hey Jarvis", it asks "Yes?".
-- **Offline speech recognition** with a streaming Zipformer model. Google's recognizer is used only if you skip that download.
-- **A natural voice.** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) runs locally with 11 voices (British and American). Android's built-in voice is the fallback.
-- Jarvis mutes its own microphone while speaking, so it never hears itself.
+- **Offline speech recognition** with a streaming Zipformer model. Quiet voices, like someone across the room, are boosted automatically. Google's recognizer is used only if you skip that download.
+- **Your choice of voice.** [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) runs on the phone with 11 voices (British and American), or stream a cloud voice from **OpenAI**, **ElevenLabs**, **Fish Audio** or any OpenAI-compatible server. If a cloud voice can't be reached, Jarvis falls back to Kokoro or the phone's own voice.
+- Jarvis uses the phone's echo cancellation and tells its own voice apart from yours, so it doesn't interrupt itself.
 
 ### Phone control
 - Taps, long-presses, types, scrolls, swipes, presses Back/Home and opens apps.
@@ -186,6 +187,8 @@ app/src/main/java/com/jarvis/assistant/
 ├── voice/
 │   ├── VoiceInput.kt         # microphone, wake word and offline speech recognition
 │   ├── Kokoro.kt             # on-device neural voice
+│   ├── CloudVoice.kt         # OpenAI, ElevenLabs, Fish Audio and OpenAI-compatible voices, streamed
+│   ├── AudioOut.kt           # shared speaker output, interruption and loudness for the island
 │   ├── Voice.kt, SystemVoice.kt
 │   ├── CommandListener.kt    # Google speech recognizer fallback
 │   └── ModelDownloader.kt    # downloads and safely unpacks the models
@@ -200,7 +203,7 @@ app/src/main/java/com/jarvis/assistant/
 ## Privacy and safety
 
 - **What stays on your phone:** the microphone audio, the wake word, speech recognition and the voice.
-- **What gets sent:** while a task is running, the text on your screen (and screenshots, if you turn them on) goes to the model provider you chose. For full privacy, use LM Studio or Ollama on your own computer.
+- **What gets sent:** while a task is running, the text on your screen (and screenshots, if you turn them on) goes to the model provider you chose. If you pick a cloud voice, the sentences Jarvis speaks go to that voice provider. For full privacy, use LM Studio or Ollama and the Kokoro voice.
 - **API keys** are stored in the app's private storage and only sent to the provider they belong to.
 - **Safety rules.** Jarvis is told to ask before payments, purchases, deletions or security changes, to ask when a contact is ambiguous, and to treat text on screen as content, not instructions. These rules live in the prompt, and **models can still make mistakes**. Watch what it does until you trust it. You can stop a task at any time from the task island or the notification.
 
@@ -212,6 +215,7 @@ Found a security problem? Please see [SECURITY.md](SECURITY.md).
 - **The phone must be unlocked** for Jarvis to act. Android doesn't allow accessibility actions behind the lock screen.
 - **Wake word accuracy** was measured with synthetic speech (18/18 detected, 0/60 false alarms on sound-alike phrases). Real rooms are noisier. The mic button and the notification's *Talk* button always work.
 - **Android 14+** may block a microphone service from starting at boot. If so, open the app once.
+- **Interrupting** works best on phones with good echo cancellation (most recent phones). With the speaker very loud, "stop" may occasionally need repeating; tapping the island always works.
 - **Battery:** listening for the wake word uses a little power continuously.
 
 ## Roadmap

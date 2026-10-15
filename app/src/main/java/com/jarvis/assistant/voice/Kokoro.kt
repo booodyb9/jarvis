@@ -1,10 +1,6 @@
 package com.jarvis.assistant.voice
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -18,7 +14,6 @@ import java.io.DataOutputStream
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Kokoro-82M neural voice, run on the phone with sherpa-onnx. Kept light:
@@ -41,28 +36,11 @@ object Kokoro {
 
     private val worker = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "kokoro").apply { priority = Thread.MAX_PRIORITY } }
     private val main = Handler(Looper.getMainLooper())
-    private val generation = AtomicInteger()
     @Volatile private var tts: OfflineTts? = null
-    @Volatile private var track: AudioTrack? = null
     private var unloadTask: java.util.concurrent.ScheduledFuture<*>? = null
 
-    /** Loudness of queued speech over time (one value per 20 ms), so the island can move with the voice. */
-    private class Envelope(val startMs: Long, val levels: FloatArray)
-    private val envelopes = java.util.concurrent.CopyOnWriteArrayList<Envelope>()
-
-    /** How loud the speech playing right now is, 0..1. */
-    fun level(): Float {
-        val now = SystemClock.elapsedRealtime()
-        for (e in envelopes) {
-            val i = ((now - e.startMs) / 20).toInt()
-            if (i in e.levels.indices) return e.levels[i]
-        }
-        return 0f
-    }
-
     /** Diagnostics: samples sent to the speaker for the most recent utterance, and the last error. */
-    @Volatile var lastSamplesPlayed = 0L
-        private set
+    val lastSamplesPlayed get() = AudioOut.lastSamplesPlayed
     @Volatile var lastError: String? = null
         private set
 
@@ -83,21 +61,17 @@ object Kokoro {
      */
     fun speak(context: Context, text: String, speaker: Int, speed: Float, onDone: () -> Unit) {
         val app = context.applicationContext
-        val myGen = generation.incrementAndGet()
-        track?.let { runCatching { it.pause(); it.flush() } } // interrupts a blocking write in progress
+        val ticket = AudioOut.interrupt()
         worker.execute {
             try {
-                lastSamplesPlayed = 0
-                envelopes.clear()
-                val out = audioTrack()
-                val player = Player(out, myGen)
+                val player = AudioOut.Playback(ticket)
                 val cached = cacheFile(app, text, speaker, speed).takeIf { it.exists() }?.let { readPcm(it) }
                 if (cached != null) {
                     player.write(cached)
                 } else {
                     val engine = engine(app) ?: throw IllegalStateException("Kokoro unavailable")
                     val audio = engine.generateWithCallback(text, speaker, speed, ChunkCallback(player))
-                    if (text in STOCK_PHRASES && generation.get() == myGen) writePcm(cacheFile(app, text, speaker, speed), audio.samples)
+                    if (text in STOCK_PHRASES && AudioOut.isCurrent(ticket)) writePcm(cacheFile(app, text, speaker, speed), audio.samples)
                 }
                 player.finish()
             } catch (e: Throwable) {
@@ -105,16 +79,12 @@ object Kokoro {
                 lastError = "Speaking failed: $e"
             }
             scheduleUnload()
-            if (generation.get() == myGen) main.post(onDone)
+            if (AudioOut.isCurrent(ticket)) main.post(onDone)
         }
     }
 
     /** Stop speaking now. */
-    fun stop() {
-        generation.incrementAndGet()
-        envelopes.clear()
-        track?.let { runCatching { it.pause(); it.flush() } }
-    }
+    fun stop() = AudioOut.stop()
 
     /** Renders the stock phrases for a voice ahead of time (after the model is downloaded or the voice changes). */
     fun prerender(context: Context, speaker: Int, speed: Float) {
@@ -136,47 +106,8 @@ object Kokoro {
      * code looks up `invoke(float[]): Integer` by name, and Kotlin 2 compiles lambdas without that method
      * (calling it then fails with NoSuchMethodError and no audio plays).
      */
-    private class ChunkCallback(private val player: Player) : (FloatArray) -> Int {
+    private class ChunkCallback(private val player: AudioOut.Playback) : (FloatArray) -> Int {
         override fun invoke(samples: FloatArray): Int = if (player.write(samples)) 1 else 0 // 0 = stop generating
-    }
-
-    /** Writes audio and keeps track of when it will have finished playing. */
-    private class Player(val out: AudioTrack, val gen: Int) {
-        private var endAt = 0L
-        private var started = false
-
-        /** Returns false if this speech has been interrupted. */
-        fun write(samples: FloatArray): Boolean {
-            if (generation.get() != gen) return false
-            if (!started) { out.play(); started = true }
-            recordEnvelope(maxOf(endAt, SystemClock.elapsedRealtime()), samples)
-            out.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-            lastSamplesPlayed += samples.size
-            // Track the end time on the wall clock rather than the playback head, which is
-            // unreliable across pause/flush and for clips shorter than the start threshold.
-            val now = SystemClock.elapsedRealtime()
-            endAt = maxOf(endAt, now) + samples.size * 1000L / SAMPLE_RATE
-            return generation.get() == gen
-        }
-
-        fun finish() {
-            if (!started) return
-            while (generation.get() == gen && SystemClock.elapsedRealtime() < endAt + 120) Thread.sleep(20)
-            if (generation.get() == gen) out.stop() // also plays out anything still buffered
-        }
-    }
-
-    private fun recordEnvelope(startMs: Long, samples: FloatArray) {
-        val step = SAMPLE_RATE / 50 // 20 ms
-        val levels = FloatArray((samples.size + step - 1) / step) { i ->
-            var sum = 0f
-            val end = minOf(samples.size, (i + 1) * step)
-            for (j in i * step until end) sum += samples[j] * samples[j]
-            (kotlin.math.sqrt(sum / (end - i * step)) * 6f).coerceAtMost(1f)
-        }
-        val now = SystemClock.elapsedRealtime()
-        envelopes.removeAll { it.startMs + it.levels.size * 20L < now - 1000 }
-        envelopes += Envelope(startMs, levels)
     }
 
     private fun engine(context: Context): OfflineTts? {
@@ -210,37 +141,10 @@ object Kokoro {
         }
     }
 
-    private fun audioTrack(): AudioTrack {
-        track?.let { return it }
-        val minBuf = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        val t = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build()
-            )
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setBufferSizeInBytes(maxOf(minBuf, SAMPLE_RATE * 4 / 4)) // ~250 ms
-            .build()
-        // Start playing as soon as there is any audio, so short clips like "Yes?" aren't held back.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching { t.setStartThresholdInFrames(256) }
-        track = t
-        return t
-    }
-
     private fun scheduleUnload() {
         unloadTask?.cancel(false)
         unloadTask = worker.schedule({
             tts?.release(); tts = null
-            track?.release(); track = null
             Log.i(TAG, "unloaded after idle")
         }, IDLE_UNLOAD_MS, TimeUnit.MILLISECONDS)
     }

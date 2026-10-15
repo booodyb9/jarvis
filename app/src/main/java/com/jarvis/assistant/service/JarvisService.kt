@@ -128,17 +128,33 @@ class JarvisService : Service() {
     }
 
     // ---- Voice flow ----
+    //
+    // A conversation: "Hey Jarvis" (or a follow-up straight after a reply) → listen → work → reply.
+    // The microphone stays open while Jarvis works and while it replies, so the user can interrupt
+    // at any point: by saying "Hey Jarvis" or, during a reply, simply by talking over it.
 
-    /** What to do when the current speech ends (also run if it's stopped early). */
+    /** What to do when the current speech ends naturally (also run if it's stopped from the island). */
     private var afterSpeech: (() -> Unit)? = null
     private var speechId = 0
+    /** Increases with every task; a result from a task that was interrupted is never spoken. */
+    @Volatile private var taskId = 0
+    /** Recent requests and replies, so follow-ups like "and tell her I'll be late" make sense. */
+    private val conversation = ArrayDeque<Pair<String, String>>()
+    private var lastExchangeAt = 0L
 
-    /** Speaks with the microphone muted, so Jarvis never hears (or transcribes) itself. */
-    private fun say(text: String, then: () -> Unit = {}) {
-        voice.muted = true
+    /**
+     * Speaks [text]. If [interruptible] (and the user allows it), the microphone stays open and
+     * talking over Jarvis stops it and becomes the next command; otherwise the microphone is muted
+     * so Jarvis never hears itself.
+     */
+    private fun say(text: String, interruptible: Boolean = false, then: () -> Unit = {}) {
         val id = ++speechId
+        val bargeIn = interruptible && settings.interruptByTalking && voice.canTranscribe && voice.isListening
+        if (bargeIn) voice.listenWhileSpeaking(text) { stop -> onBargeIn(stop) } else voice.muted = true
         afterSpeech = {
-            main.postDelayed({ voice.muted = false; then() }, 150) // let the speaker's echo die away
+            voice.stopListeningWhileSpeaking()
+            // After muted speech, let the speaker's echo die away before listening again.
+            main.postDelayed({ voice.muted = false; then() }, if (bargeIn) 0L else 150L)
         }
         island { it.speaking(text) { speaker.level() } }
         speaker.speak(text) { if (id == speechId) finishSpeech() }
@@ -158,17 +174,64 @@ class JarvisService : Service() {
         if (afterSpeech != null) finishSpeech() else island { if (it.isShowing) it.speakingDone() }
     }
 
+    /** Stops talking now and forgets what was going to happen next (the user has taken over). */
+    private fun interruptSpeech() {
+        speechId++
+        afterSpeech = null
+        voice.stopListeningWhileSpeaking()
+        voice.muted = false
+        speaker.stop()
+        island { if (it.isShowing) it.speakingDone() }
+    }
+
     private fun onWakeWord() {
-        if (destroyed || state != State.IDLE) return
+        if (destroyed) return
+        when (state) {
+            State.LISTENING_COMMAND -> return
+            State.WORKING -> {
+                // "Hey Jarvis" during a task: stop it and take the new command.
+                cancelled = true
+                taskId++
+                interruptSpeech()
+                listen(promptIfQuiet = true)
+            }
+            State.IDLE -> {
+                interruptSpeech()
+                listen(promptIfQuiet = true)
+            }
+        }
+    }
+
+    /** The user talked over Jarvis: what they're saying is the next command, or they said "stop". */
+    private fun onBargeIn(stop: Boolean) {
+        if (destroyed) return
+        interruptSpeech()
+        if (state == State.WORKING) { cancelled = true; taskId++ }
+        if (stop) {
+            state = State.IDLE
+            voice.cancelCommand()
+            island { it.hide() }
+            update("Okay")
+            resumeListening()
+        } else {
+            listen(promptIfQuiet = false, interrupted = true)
+        }
+    }
+
+    /**
+     * Transcribes the next thing the user says. After "Hey Jarvis" ([promptIfQuiet]) Jarvis says
+     * "Yes?" if they pause; for a [followUp] it waits quietly for a few seconds and gives up silently.
+     */
+    private fun listen(promptIfQuiet: Boolean, followUp: Boolean = false, interrupted: Boolean = false) {
         state = State.LISTENING_COMMAND
         update("Listening…")
         speaker.warmUp() // load the voice now, so the reply has no delay
         island { it.listening(if (voice.canTranscribe) ({ voice.partialText }) else null, { voice.level }) }
         if (voice.canTranscribe) {
-            // Keep transcribing straight after the wake word, so "Hey Jarvis, call mum" works in one breath.
-            voice.listenForCommand { text -> onHeard(text) }
-            // If the user paused after "Hey Jarvis", prompt them; if they're already talking, just listen.
-            main.postDelayed({
+            voice.start()
+            // Keeps transcribing from the wake word on, so "Hey Jarvis, call mum" works in one breath.
+            voice.listenForCommand(if (followUp) FOLLOW_UP_MS else 7000) { text -> onHeard(text, followUp, interrupted) }
+            if (promptIfQuiet) main.postDelayed({
                 // Not muted: if the user starts talking over it, nothing is lost (a stray "yes" is stripped).
                 if (state == State.LISTENING_COMMAND && !voice.speechSinceWake && voice.partialText.isEmpty()) {
                     island { it.speaking("Yes?") { speaker.level() } }
@@ -177,18 +240,36 @@ class JarvisService : Service() {
             }, 700)
         } else {
             voice.stop() // Google's recognizer needs the microphone
-            say("Yes?") { google.listen { text -> onHeard(text) } }
+            val heard: (String?) -> Unit = { text -> onHeard(text, followUp) }
+            if (followUp) google.listen(heard) else say("Yes?") { google.listen(heard) }
         }
     }
 
-    private fun onHeard(text: String?) {
+    private fun onHeard(text: String?, followUp: Boolean = false, interrupted: Boolean = false) {
         if (state != State.LISTENING_COMMAND) return
-        if (text.isNullOrBlank()) {
-            state = State.IDLE
-            update("Didn't catch that")
-            say("Sorry, I didn't catch that.") { island { it.hide() }; resumeListening() }
-        } else {
-            runTask(text)
+        when {
+            // A one-word interruption is almost always "stop", "wait" or "no", often half drowned out
+            // by Jarvis's voice. Don't act on it; just listen for what comes next.
+            interrupted && text != null && VoiceInput.words(text).size <= 1 && !VoiceInput.isStopCommand(text) ->
+                listen(promptIfQuiet = false, followUp = true)
+            text.isNullOrBlank() && followUp -> {
+                // Nothing more was said after a reply: go back to waiting, quietly.
+                state = State.IDLE
+                island { it.hide() }
+                resumeListening()
+            }
+            text.isNullOrBlank() -> {
+                state = State.IDLE
+                update("Didn't catch that")
+                say("Sorry, I didn't catch that.", interruptible = true) { island { it.hide() }; resumeListening() }
+            }
+            VoiceInput.isStopCommand(text) -> {
+                state = State.IDLE
+                island { it.hide() }
+                update("Okay")
+                resumeListening()
+            }
+            else -> runTask(text)
         }
     }
 
@@ -196,35 +277,60 @@ class JarvisService : Service() {
         if (destroyed || state == State.WORKING) return
         state = State.WORKING
         cancelled = false
+        val id = ++taskId
         voice.cancelCommand()
-        voice.stop()
+        // Keep listening for "Hey Jarvis" while working, so the user can stop or redirect the task.
+        if (voice.hasWakeWord && settings.wakeWordEnabled) voice.start()
         lastTask = task
         island { it.working(task) }
         update("Working on: $task")
         say("On it.")
+        val earlier = recentConversation()
         worker.execute {
             val result = try {
                 waitForUnlock()
-                PhoneAgent(settings, host).run(task)
+                PhoneAgent(settings, hostFor(id)).run(task, earlier)
             } catch (e: Throwable) {
                 Log.e(TAG, "task failed", e)
                 com.jarvis.assistant.agent.AgentResult(false, "Something went wrong: ${e.message}")
             }
             main.post {
+                if (id != taskId || destroyed) return@post // interrupted by a newer command
                 lastResult = result.summary
+                remember(task, result.summary)
                 island { it.finish(result.success, result.summary) }
                 update(result.summary)
-                say(result.summary) {
+                say(result.summary, interruptible = true) {
                     state = State.IDLE
-                    resumeListening()
+                    afterReply()
                 }
             }
         }
     }
 
+    /** After a reply: listen for a follow-up without the wake word, or go back to waiting. */
+    private fun afterReply() {
+        if (destroyed) return
+        if (settings.followUp && voice.canTranscribe) listen(promptIfQuiet = false, followUp = true)
+        else resumeListening()
+    }
+
+    private fun remember(task: String, reply: String) {
+        conversation.addLast(task to reply)
+        while (conversation.size > 3) conversation.removeFirst()
+        lastExchangeAt = System.currentTimeMillis()
+    }
+
+    /** The last few exchanges, if the conversation is still going (within 10 minutes). */
+    private fun recentConversation(): List<Pair<String, String>> {
+        if (System.currentTimeMillis() - lastExchangeAt > 10 * 60_000) conversation.clear()
+        return conversation.toList()
+    }
+
     /** Goes back to waiting for "Hey Jarvis" (loading any models downloaded since). */
     private fun resumeListening() {
         if (destroyed || state != State.IDLE) return
+        voice.echoCancellation = settings.interruptByTalking
         voice.load { error ->
             if (destroyed || state != State.IDLE) return@load
             voice.wakeEnabled = settings.wakeWordEnabled
@@ -257,9 +363,9 @@ class JarvisService : Service() {
         done.await(30, TimeUnit.SECONDS)
     }
 
-    /** Bridges the agent (worker thread) to the voice UI (main thread). */
-    private val host = object : AgentHost {
-        override val isCancelled get() = cancelled
+    /** Bridges the agent (worker thread) to the voice UI (main thread) for task [id]. */
+    private fun hostFor(id: Int) = object : AgentHost {
+        override val isCancelled get() = cancelled || id != taskId
         override fun status(text: String) { main.post { update(text) } }
         override fun ask(question: String): String? {
             val latch = CountDownLatch(1)
@@ -269,7 +375,8 @@ class JarvisService : Service() {
                 say(question) {
                     island { it.listening(if (voice.canTranscribe) ({ voice.partialText }) else null, { voice.level }) }
                     val got: (String?) -> Unit = { text -> answer = text; latch.countDown(); island { it.working() } }
-                    if (voice.canTranscribe) voice.listenForCommand(10_000) { voice.stop(); got(it) } else google.listen(got)
+                    if (voice.canTranscribe) voice.listenForCommand(10_000) { got(it) }
+                    else { voice.stop(); google.listen { got(it); if (voice.hasWakeWord) voice.start() } }
                 }
             }
             // Give up after a minute, or straight away if the task is stopped.
@@ -336,6 +443,8 @@ class JarvisService : Service() {
         const val ACTION_STOP_TASK = "com.jarvis.assistant.STOP_TASK"
         const val ACTION_SHUTDOWN = "com.jarvis.assistant.SHUTDOWN"
         const val EXTRA_TASK = "task"
+        /** How long to wait for a follow-up after a reply. */
+        private const val FOLLOW_UP_MS = 6000L
 
         enum class Phase { OFF, IDLE, LISTENING, WORKING }
 

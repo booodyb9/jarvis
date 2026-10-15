@@ -89,7 +89,7 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("boot", false)
         set(v) = prefs.edit().putBoolean("boot", v).apply()
 
-    /** Free-form facts the agent should know, e.g. "My wife is saved as 'Amaka ❤️' in WhatsApp". */
+    /** Free-form facts the agent should know, e.g. "My wife is saved as 'Amaka' in WhatsApp". */
     var personalNotes: String
         get() = prefs.getString("notes", "")!!
         set(v) = prefs.edit().putString("notes", v).apply()
@@ -167,7 +167,10 @@ class Settings(context: Context) {
 
     // ---- Voice ----
 
-    /** "kokoro" (natural on-device neural voice) or "system" (Android text-to-speech). */
+    /**
+     * "kokoro" (natural on-device neural voice), "system" (Android text-to-speech), or the id of a
+     * cloud voice in [CLOUD_VOICES] ("openai", "elevenlabs", "fish", "custom").
+     */
     var voiceEngine: String
         get() = prefs.getString("voice_engine", "kokoro")!!
         set(v) = prefs.edit().putString("voice_engine", v).apply()
@@ -179,7 +182,86 @@ class Settings(context: Context) {
     var voiceSpeed: Float
         get() = prefs.getFloat("voice_speed", 1.0f)
         set(v) = prefs.edit().putFloat("voice_speed", v).apply()
+
+    // ---- Cloud voices ----
+
+    fun cloudVoice(id: String): CloudVoiceConfig {
+        val preset = CLOUD_VOICES.first { it.id == id }
+        return CloudVoiceConfig(
+            id = id,
+            apiKey = prefs.getString("tts_${id}_key", "")!!.ifEmpty { if (id == "openai") openAiKeyFromModels() else "" },
+            model = prefs.getString("tts_${id}_model", "")!!.ifEmpty { preset.defaultModel },
+            voice = prefs.getString("tts_${id}_voice", null) ?: preset.defaultVoice,
+            baseUrl = prefs.getString("tts_${id}_url", "")!!.ifEmpty { preset.defaultBaseUrl },
+        )
+    }
+
+    fun saveCloudVoice(c: CloudVoiceConfig) {
+        prefs.edit()
+            .putString("tts_${c.id}_key", c.apiKey.trim())
+            .putString("tts_${c.id}_model", c.model.trim())
+            .putString("tts_${c.id}_voice", c.voice.trim())
+            .putString("tts_${c.id}_url", c.baseUrl.trim().trimEnd('/'))
+            .apply()
+    }
+
+    /** Re-use the key of an OpenAI model the user already added, so they don't have to paste it twice. */
+    private fun openAiKeyFromModels(): String =
+        modelsInOrder().firstOrNull { it.providerId == "openai" && it.apiKey.isNotBlank() }?.apiKey.orEmpty()
+
+    // ---- Conversation ----
+
+    /** Let the user talk over Jarvis to interrupt it (the microphone stays on while it speaks). */
+    var interruptByTalking: Boolean
+        get() = prefs.getBoolean("barge_in", true)
+        set(v) = prefs.edit().putBoolean("barge_in", v).apply()
+
+    /** After answering, keep listening for a few seconds so a follow-up needs no wake word. */
+    var followUp: Boolean
+        get() = prefs.getBoolean("follow_up", true)
+        set(v) = prefs.edit().putBoolean("follow_up", v).apply()
 }
+
+data class CloudVoiceConfig(val id: String, val apiKey: String, val model: String, val voice: String, val baseUrl: String)
+
+data class CloudVoicePreset(
+    val id: String,
+    val name: String,
+    val defaultModel: String,
+    val defaultVoice: String,
+    val defaultBaseUrl: String,
+    /** Where to get a key. */
+    val keyHint: String,
+    /** What to put in the voice field. */
+    val voiceHint: String,
+    val needsKey: Boolean = true,
+    val editableUrl: Boolean = false,
+)
+
+/** Voices that run in the cloud. Audio streams back as it's generated, so speech starts quickly. */
+val CLOUD_VOICES = listOf(
+    CloudVoicePreset(
+        "openai", "OpenAI", "gpt-4o-mini-tts", "onyx", "https://api.openai.com/v1",
+        keyHint = "Get a key at platform.openai.com → API keys. If you've added an OpenAI model, its key is used automatically.",
+        voiceHint = "alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer or verse",
+    ),
+    CloudVoicePreset(
+        "elevenlabs", "ElevenLabs", "eleven_flash_v2_5", "JBFqnCBsd6RMkjVDRZzb", "https://api.elevenlabs.io/v1",
+        keyHint = "Get a key at elevenlabs.io → Developers → API keys.",
+        voiceHint = "A voice ID from your ElevenLabs voice library. The default is George, a warm British voice.",
+    ),
+    CloudVoicePreset(
+        "fish", "Fish Audio", "s2.1-pro", "", "https://api.fish.audio/v1",
+        keyHint = "Get a key at fish.audio → API keys.",
+        voiceHint = "The ID of a voice on fish.audio (open the voice and copy the ID from its page). Leave empty for the default voice.",
+    ),
+    CloudVoicePreset(
+        "custom", "Custom", "tts-1", "alloy", "http://192.168.1.10:8880/v1",
+        keyHint = "Any server with an OpenAI-compatible /audio/speech endpoint, such as Kokoro-FastAPI on your computer. A key is optional.",
+        voiceHint = "The voice name your server expects.",
+        needsKey = false, editableUrl = true,
+    ),
+)
 
 data class KokoroVoice(val sid: Int, val name: String, val accent: String)
 

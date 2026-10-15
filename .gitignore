@@ -23,3 +23,6 @@ app/libs/*.part
 # Optional native engine and models for RealEngineTest (see CONTRIBUTING.md)
 /test-native/*
 !/test-native/README.md
+
+# JVM crash logs
+hs_err_pid*.log

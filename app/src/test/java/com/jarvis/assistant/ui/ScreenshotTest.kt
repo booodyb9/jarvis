@@ -60,6 +60,18 @@ class ScreenshotTest {
     }
 
     @Test
+    fun cloudVoiceSettings() {
+        withModels().voiceEngine = "elevenlabs"
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { a ->
+                a.goTo(R.id.nav_settings)
+                ShadowLooper.idleMainLooper()
+                capturePage(a, "settings_cloud")
+            }
+        }
+    }
+
+    @Test
     fun modelEditor() {
         withModels()
         val id = Settings(ctx).profiles().first().id

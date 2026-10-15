@@ -11,7 +11,6 @@ Say *"Hey Jarvis, text Mum I'm on my way"* and Jarvis opens the app, finds the c
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](#requirements)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![CI](https://github.com/judejulius/jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/judejulius/jarvis/actions/workflows/ci.yml)
 
 
 [Download](#install) · [Features](#features) · [How it works](#how-it-works) · [Contributing](CONTRIBUTING.md)

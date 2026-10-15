@@ -11,9 +11,7 @@ Say *"Hey Jarvis, text Mum I'm on my way"* and Jarvis opens the app, finds the c
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](#requirements)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![CI](https://github.com/judejulius/jarvis-android/actions/workflows/ci.yml/badge.svg)](https://github.com/judejulius/jarvis-android/actions/workflows/ci.yml)
-[![GitHub release](https://img.shields.io/github/v/release/judejulius/jarvis-android)](https://github.com/judejulius/jarvis-android/releases)
-[![GitHub stars](https://img.shields.io/github/stars/judejulius/jarvis-android?style=social)](https://github.com/judejulius/jarvis-android/stargazers)
+
 
 [Download](#install) · [Features](#features) · [How it works](#how-it-works) · [Contributing](CONTRIBUTING.md)
 
@@ -95,7 +93,7 @@ Phone assistants can answer questions, but most of them can't use your apps for 
 - An API key for a cloud model, **or** a computer running LM Studio or Ollama.
 
 ### Download
-1. Get the latest `Jarvis-*.apk` from [**Releases**](https://github.com/judejulius/jarvis-android/releases).
+1. Get the latest `Jarvis-*.apk` from [**Releases**](https://github.com/judejulius/jarvis/releases).
 2. Open it on your phone. If asked, allow your browser or file manager to **install unknown apps**.
 3. Open Jarvis and follow the setup walkthrough.
 
@@ -156,8 +154,8 @@ flowchart LR
 You need **JDK 17+** and the **Android SDK** (API 35). Android Studio provides both.
 
 ```bash
-git clone https://github.com/judejulius/jarvis-android.git
-cd jarvis-android
+git clone https://github.com/judejulius/jarvis.git
+cd jarvis
 ./gradlew assembleDebug        # the first build downloads sherpa-onnx (50 MB)
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```

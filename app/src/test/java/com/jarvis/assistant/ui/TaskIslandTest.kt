@@ -55,6 +55,14 @@ class TaskIslandTest {
         assertTrue("hidden after showing the result", views(service).isEmpty())
     }
 
+    @Test
+    fun sitsBelowTheStatusBarAndCamera() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val res = ctx.resources
+        val statusBar = res.getDimensionPixelSize(res.getIdentifier("status_bar_height", "dimen", "android"))
+        assertTrue("island must clear the status bar", TaskIsland.topOffset(ctx) > statusBar)
+    }
+
     private fun snapshot(v: View, name: String) {
         (v.findViewById<ArcReactorView?>(R.id.islandReactor))?.animate = false
         v.scaleX = 1f; v.scaleY = 1f; v.alpha = 1f

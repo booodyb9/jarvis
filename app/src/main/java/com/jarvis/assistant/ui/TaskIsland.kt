@@ -106,13 +106,27 @@ class TaskIsland(private val service: AccessibilityService) {
     }
 
     companion object {
-        /** Centre the 38 dp pill on the status bar, where the camera cut-out usually is. */
+        /**
+         * Places the pill just below the status bar and camera cut-out, so it never covers the
+         * notification icons or the camera.
+         */
         fun topOffset(context: Context): Int {
             val res = context.resources
-            val id = res.getIdentifier("status_bar_height", "dimen", "android")
-            val statusBar = if (id > 0) res.getDimensionPixelSize(id) else (24 * res.displayMetrics.density).toInt()
-            val pill = (38 * res.displayMetrics.density).toInt()
-            return maxOf((4 * res.displayMetrics.density).toInt(), (statusBar - pill) / 2)
+            val gap = (10 * res.displayMetrics.density).toInt()
+            var top = 0
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                runCatching {
+                    val insets = context.getSystemService(WindowManager::class.java).currentWindowMetrics.windowInsets
+                    top = insets.getInsetsIgnoringVisibility(
+                        android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.displayCutout()
+                    ).top
+                }
+            }
+            if (top <= 0) {
+                val id = res.getIdentifier("status_bar_height", "dimen", "android")
+                top = if (id > 0) res.getDimensionPixelSize(id) else (24 * res.displayMetrics.density).toInt()
+            }
+            return top + gap
         }
     }
 }

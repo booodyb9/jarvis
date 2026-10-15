@@ -54,6 +54,8 @@ class VoiceInput(private val context: Context, private val onWake: () -> Unit) {
     @Volatile private var spotter: KeywordSpotter? = null
     @Volatile private var recognizer: OnlineRecognizer? = null
     @Volatile private var running = false
+    /** Set by [release]; a model load still in progress must not bring the microphone back. */
+    @Volatile private var released = false
     private var thread: Thread? = null
 
     /** While true, microphone audio is ignored (Jarvis is talking and mustn't hear itself). */
@@ -89,6 +91,7 @@ class VoiceInput(private val context: Context, private val onWake: () -> Unit) {
 
     /** Loads whichever models are installed. Calls [ready] on the main thread with an error message or null. */
     fun load(ready: (error: String?) -> Unit) {
+        if (released) return
         Thread {
             val errors = mutableListOf<String>()
             if (spotter == null && WakeModel.isInstalled(context)) {
@@ -145,13 +148,19 @@ class VoiceInput(private val context: Context, private val onWake: () -> Unit) {
                     errors += "Offline speech recognition couldn't start; using Google's instead."
                 }
             }
-            main.post { ready(errors.firstOrNull()) }
+            if (released) {
+                // Turned off while loading: free what was just loaded and stay quiet.
+                spotter?.release(); spotter = null
+                recognizer?.release(); recognizer = null
+                return@Thread
+            }
+            main.post { if (!released) ready(errors.firstOrNull()) }
         }.start()
     }
 
     /** Opens the microphone and starts listening (for the wake word, and for commands when asked). */
     fun start() {
-        if (running || (spotter == null && recognizer == null)) return
+        if (released || running || (spotter == null && recognizer == null)) return
         running = true
         thread = Thread({ loop() }, "jarvis-mic").apply { start() }
     }
@@ -164,6 +173,7 @@ class VoiceInput(private val context: Context, private val onWake: () -> Unit) {
     }
 
     fun release() {
+        released = true
         stop()
         cancelCommand()
         spotter?.release(); spotter = null

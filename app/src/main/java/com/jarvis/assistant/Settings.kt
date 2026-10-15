@@ -80,6 +80,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("wake_enabled", true)
         set(v) = prefs.edit().putBoolean("wake_enabled", v).apply()
 
+    /** Whether the user has Jarvis switched on. Only the user changes this, so "Turn off" sticks. */
+    var switchedOn: Boolean
+        get() = prefs.getBoolean("switched_on", false)
+        set(v) = prefs.edit().putBoolean("switched_on", v).apply()
+
     var startOnBoot: Boolean
         get() = prefs.getBoolean("boot", false)
         set(v) = prefs.edit().putBoolean("boot", v).apply()

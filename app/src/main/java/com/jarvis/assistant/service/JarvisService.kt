@@ -51,6 +51,8 @@ class JarvisService : Service() {
     @Volatile private var state = State.IDLE
     @Volatile private var cancelled = false
     private var startFailed = false
+    /** Set in onDestroy; stops late callbacks (speech finishing, models loading) from listening again. */
+    @Volatile private var destroyed = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -87,7 +89,11 @@ class JarvisService : Service() {
                 voice.cancelCommand(); google.cancel(); speaker.stop()
                 update("Stopping…")
             }
-            ACTION_SHUTDOWN -> { stopSelf(); return START_NOT_STICKY }
+            ACTION_SHUTDOWN -> {
+                settings.switchedOn = false
+                stopSelf()
+                return START_NOT_STICKY
+            }
             ACTION_RUN -> intent.getStringExtra(EXTRA_TASK)?.let { runTask(it) }
             ACTION_LISTEN -> if (state == State.IDLE) onWakeWord()
         }
@@ -95,6 +101,7 @@ class JarvisService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         running = false
         phase = Phase.OFF
         status = "Offline"
@@ -121,7 +128,7 @@ class JarvisService : Service() {
     }
 
     private fun onWakeWord() {
-        if (state != State.IDLE) return
+        if (destroyed || state != State.IDLE) return
         state = State.LISTENING_COMMAND
         update("Listening…")
         speaker.warmUp() // load the voice now, so the reply has no delay
@@ -151,7 +158,7 @@ class JarvisService : Service() {
     }
 
     private fun runTask(task: String) {
-        if (state == State.WORKING) return
+        if (destroyed || state == State.WORKING) return
         state = State.WORKING
         cancelled = false
         voice.cancelCommand()
@@ -182,9 +189,9 @@ class JarvisService : Service() {
 
     /** Goes back to waiting for "Hey Jarvis" (loading any models downloaded since). */
     private fun resumeListening() {
-        if (state != State.IDLE) return
+        if (destroyed || state != State.IDLE) return
         voice.load { error ->
-            if (state != State.IDLE) return@load
+            if (destroyed || state != State.IDLE) return@load
             voice.wakeEnabled = settings.wakeWordEnabled
             when {
                 error != null -> update(error)
@@ -310,13 +317,22 @@ class JarvisService : Service() {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 return false
             }
+            Settings(context).switchedOn = true
             val intent = Intent(context, JarvisService::class.java).setAction(action).putExtra(EXTRA_TASK, task)
             ContextCompat.startForegroundService(context, intent)
             return true
         }
 
+        /** Turns Jarvis off and keeps it off until the user turns it on again. */
         fun stop(context: Context) {
-            context.startService(Intent(context, JarvisService::class.java).setAction(ACTION_SHUTDOWN))
+            Settings(context).switchedOn = false
+            // stopService never creates the service, unlike sending it a "shut down" intent.
+            context.stopService(Intent(context, JarvisService::class.java))
+        }
+
+        /** For automatic starts (boot, phone control connecting): only if the user left Jarvis on. */
+        fun startIfSwitchedOn(context: Context) {
+            if (Settings(context).switchedOn) start(context)
         }
     }
 }

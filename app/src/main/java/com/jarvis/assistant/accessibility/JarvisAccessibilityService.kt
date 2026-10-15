@@ -33,7 +33,7 @@ class JarvisAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         // An enabled accessibility service is a good moment to make sure the listener is running.
-        if (Settings(this).wakeWordEnabled) runCatching { JarvisService.start(this) }
+        if (Settings(this).wakeWordEnabled) runCatching { JarvisService.startIfSwitchedOn(this) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit

@@ -26,6 +26,7 @@ import org.robolectric.shadows.ShadowAudioTrack
 import java.io.File
 import java.nio.ByteBuffer
 import java.time.Duration
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 
@@ -124,6 +125,27 @@ class RealEngineTest {
             println("STATUS: $finalStatus | task=${JarvisService.lastTask}")
             controller.destroy()
         }
+    }
+
+    @Test
+    fun turningOffWhileModelsLoadKeepsTheMicClosed() {
+        installAll()
+        val reads = java.util.concurrent.atomic.AtomicInteger()
+        ShadowAudioRecord.setSource(object : ShadowAudioRecord.AudioRecordSource {
+            override fun readInShortArray(audioData: ShortArray, offsetInShorts: Int, sizeInShorts: Int, isBlocking: Boolean): Int {
+                reads.incrementAndGet()
+                Thread.sleep(sizeInShorts * 1000L / 16000)
+                return sizeInShorts
+            }
+        })
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
+        // Turn on, then off straight away while the models are still loading.
+        Robolectric.buildService(JarvisService::class.java).create().startCommand(0, 1).destroy()
+        waitFor(5000) { false } // plenty of time for the models to finish loading
+        val before = reads.get()
+        waitFor(1000) { false }
+        assertEquals("the microphone must stay closed after turning off", before, reads.get())
+        assertEquals(0, before)
     }
 
     @Test

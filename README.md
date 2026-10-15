@@ -73,15 +73,17 @@ Phone assistants can answer questions, but most of them can't use your apps for 
 - Each model has a **Test connection** button.
 
 ### Built for everyday use
-- **Task island.** A small pill at the top of the screen shows what Jarvis is doing. Tap it to stop.
+- **Dynamic Island.** A black pill just below the camera shows what Jarvis is doing. Its sound bars move with your voice while it listens, and its border lights up and moves with Jarvis's voice while it talks. Tap it to open a card with the task, live progress and buttons to stop or open the app.
 - Runs as a foreground service, and can start at boot.
 - A setup walkthrough covers permissions, phone control, battery settings and downloads.
 - **"About you" notes** help with names, e.g. *"My wife is saved as 'Amaka' in WhatsApp."*
 - **Crash reports.** If the app crashes, the next launch offers a report you can share.
 
 <div align="center">
-<img src="docs/images/island-working.png" alt="Task island while working" width="300" />&nbsp;&nbsp;
-<img src="docs/images/island-done.png" alt="Task island when done" width="300" />
+<img src="docs/images/island-listening.png" alt="Island while listening" width="260" />&nbsp;&nbsp;
+<img src="docs/images/island-speaking.png" alt="Island while speaking" width="260" />
+<br /><br />
+<img src="docs/images/island-expanded.png" alt="Island expanded" width="420" />
 </div>
 
 ## Install

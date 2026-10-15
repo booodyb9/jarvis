@@ -33,7 +33,13 @@ class Speaker(context: Context) {
     /** Load the voice now so the next reply starts without delay. */
     fun warmUp() { if (usingKokoro) Kokoro.warmUp(app) }
 
-    fun stop() = Kokoro.stop()
+    fun stop() {
+        Kokoro.stop()
+        if (usedSystem) system.stop()
+    }
+
+    /** Loudness of the speech playing now (0..1), or null if this voice can't tell. */
+    fun level(): Float? = if (usingKokoro) Kokoro.level() else null
 
     fun shutdown() {
         Kokoro.stop()

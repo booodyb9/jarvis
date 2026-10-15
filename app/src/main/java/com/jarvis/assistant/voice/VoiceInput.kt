@@ -61,6 +61,10 @@ class VoiceInput(private val context: Context, private val onWake: () -> Unit) {
     /** While true, microphone audio is ignored (Jarvis is talking and mustn't hear itself). */
     @Volatile var muted = false
 
+    /** Microphone loudness right now, 0..1, for the island's sound bars. */
+    @Volatile var level = 0f
+        private set
+
     @Volatile var wakeEnabled = true
 
     // Command state, touched by the audio thread and main thread.
@@ -227,9 +231,10 @@ class VoiceInput(private val context: Context, private val onWake: () -> Unit) {
             while (running) {
                 val n = record.read(pcm, 0, pcm.size)
                 if (n <= 0) { if (n < 0) Thread.sleep(20); continue }
-                if (muted) continue
+                if (muted) { level = 0f; continue }
                 val samples = FloatArray(n) { pcm[it] / 32768f }
                 val level = rms(samples)
+                this.level = (level * 8).coerceAtMost(1f)
                 if (level > maxOf(MIN_SPEECH_LEVEL, noiseFloor * 3)) speechSinceWake = true
 
                 val (session, backlog) = synchronized(lock) {

@@ -86,8 +86,18 @@ class JarvisService : Service() {
         when (intent?.action) {
             ACTION_STOP_TASK -> {
                 cancelled = true
-                voice.cancelCommand(); google.cancel(); speaker.stop()
-                update("Stopping…")
+                voice.cancelCommand(); google.cancel()
+                if (state == State.LISTENING_COMMAND) {
+                    // Cancel listening: nothing will call onHeard now, so go back to waiting.
+                    stopSpeaking()
+                    state = State.IDLE
+                    island { it.hide() }
+                    update("Cancelled")
+                    resumeListening()
+                } else {
+                    stopSpeaking()
+                    if (state == State.WORKING) update("Stopping…")
+                }
             }
             ACTION_SHUTDOWN -> {
                 settings.switchedOn = false
@@ -119,12 +129,33 @@ class JarvisService : Service() {
 
     // ---- Voice flow ----
 
+    /** What to do when the current speech ends (also run if it's stopped early). */
+    private var afterSpeech: (() -> Unit)? = null
+    private var speechId = 0
+
     /** Speaks with the microphone muted, so Jarvis never hears (or transcribes) itself. */
     private fun say(text: String, then: () -> Unit = {}) {
         voice.muted = true
-        speaker.speak(text) {
+        val id = ++speechId
+        afterSpeech = {
             main.postDelayed({ voice.muted = false; then() }, 150) // let the speaker's echo die away
         }
+        island { it.speaking(text) { speaker.level() } }
+        speaker.speak(text) { if (id == speechId) finishSpeech() }
+    }
+
+    private fun finishSpeech() {
+        val then = afterSpeech ?: return
+        afterSpeech = null
+        island { if (it.isShowing) it.speakingDone() }
+        then()
+    }
+
+    /** Stops talking now, carrying on as if the speech had finished. */
+    private fun stopSpeaking() {
+        speechId++
+        speaker.stop()
+        if (afterSpeech != null) finishSpeech() else island { if (it.isShowing) it.speakingDone() }
     }
 
     private fun onWakeWord() {
@@ -132,13 +163,17 @@ class JarvisService : Service() {
         state = State.LISTENING_COMMAND
         update("Listening…")
         speaker.warmUp() // load the voice now, so the reply has no delay
+        island { it.listening(if (voice.canTranscribe) ({ voice.partialText }) else null, { voice.level }) }
         if (voice.canTranscribe) {
             // Keep transcribing straight after the wake word, so "Hey Jarvis, call mum" works in one breath.
             voice.listenForCommand { text -> onHeard(text) }
             // If the user paused after "Hey Jarvis", prompt them; if they're already talking, just listen.
             main.postDelayed({
                 // Not muted: if the user starts talking over it, nothing is lost (a stray "yes" is stripped).
-                if (state == State.LISTENING_COMMAND && !voice.speechSinceWake && voice.partialText.isEmpty()) speaker.speak("Yes?")
+                if (state == State.LISTENING_COMMAND && !voice.speechSinceWake && voice.partialText.isEmpty()) {
+                    island { it.speaking("Yes?") { speaker.level() } }
+                    speaker.speak("Yes?") { island { if (it.isShowing) it.speakingDone() } }
+                }
             }, 700)
         } else {
             voice.stop() // Google's recognizer needs the microphone
@@ -151,7 +186,7 @@ class JarvisService : Service() {
         if (text.isNullOrBlank()) {
             state = State.IDLE
             update("Didn't catch that")
-            say("Sorry, I didn't catch that.") { resumeListening() }
+            say("Sorry, I didn't catch that.") { island { it.hide() }; resumeListening() }
         } else {
             runTask(text)
         }
@@ -164,7 +199,7 @@ class JarvisService : Service() {
         voice.cancelCommand()
         voice.stop()
         lastTask = task
-        island { it.onStop = { start(this, ACTION_STOP_TASK) }; it.show(task) }
+        island { it.working(task) }
         update("Working on: $task")
         say("On it.")
         worker.execute {
@@ -232,11 +267,16 @@ class JarvisService : Service() {
             main.post {
                 update("Asking: $question")
                 say(question) {
-                    val got: (String?) -> Unit = { text -> answer = text; latch.countDown() }
+                    island { it.listening(if (voice.canTranscribe) ({ voice.partialText }) else null, { voice.level }) }
+                    val got: (String?) -> Unit = { text -> answer = text; latch.countDown(); island { it.working() } }
                     if (voice.canTranscribe) voice.listenForCommand(10_000) { voice.stop(); got(it) } else google.listen(got)
                 }
             }
-            latch.await(60, TimeUnit.SECONDS)
+            // Give up after a minute, or straight away if the task is stopped.
+            val deadline = System.currentTimeMillis() + 60_000
+            while (!latch.await(200, TimeUnit.MILLISECONDS)) {
+                if (cancelled || System.currentTimeMillis() > deadline) break
+            }
             return answer
         }
     }
@@ -246,12 +286,15 @@ class JarvisService : Service() {
     /** Runs [block] on the task island, if phone control is on and the island is enabled. */
     private fun island(block: (com.jarvis.assistant.ui.TaskIsland) -> Unit) {
         if (!settings.showIsland) return
-        JarvisAccessibilityService.instance?.island?.let { runCatching { block(it) } }
+        JarvisAccessibilityService.instance?.island?.let {
+            it.onStop = { start(this, ACTION_STOP_TASK) }
+            runCatching { block(it) }
+        }
     }
 
     private fun update(text: String) {
         status = text
-        if (state == State.WORKING && !text.startsWith("Working on:")) island { it.show(text) }
+        if (state == State.WORKING && !text.startsWith("Working on:")) island { it.status(text) }
         phase = when (state) {
             State.IDLE -> Phase.IDLE
             State.LISTENING_COMMAND -> Phase.LISTENING

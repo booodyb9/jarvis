@@ -50,6 +50,13 @@ class SystemVoice(context: Context) : VoiceEngine {
         }
     }
 
+    /** Stops speaking. Callbacks for the interrupted speech are dropped. */
+    fun stop() {
+        pending.clear()
+        queued.clear()
+        tts.stop()
+    }
+
     override fun shutdown() {
         tts.stop()
         tts.shutdown()

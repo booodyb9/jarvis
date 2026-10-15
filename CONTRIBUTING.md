@@ -18,8 +18,8 @@ You need:
 - A 64-bit ARM Android phone with USB debugging on. The app is built for `arm64-v8a` only, so the standard x86 emulator won't run it. Add `"x86_64"` to `abiFilters` in `app/build.gradle.kts` locally if you need the emulator.
 
 ```bash
-git clone https://github.com/judejulius/jarvis-android.git
-cd jarvis-android
+git clone https://github.com/judejulius/jarvis.git
+cd jarvis
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
@@ -53,7 +53,7 @@ cd ../..
 
 ## Pull requests
 
-1. Fork the repo and create a branch from `main`, e.g. `fix/battery-step-xiaomi` or `feat/custom-wake-word`.
+1. Fork the repo and create a branch from `master`, e.g. `fix/battery-step-xiaomi` or `feat/custom-wake-word`.
 2. Keep each pull request focused on one change. Small PRs get reviewed faster.
 3. Make sure `./gradlew testDebugUnitTest lintDebug` passes. CI runs both.
 4. Add or update tests when you change behaviour.

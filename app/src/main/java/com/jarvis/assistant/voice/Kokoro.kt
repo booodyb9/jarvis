@@ -46,6 +46,20 @@ object Kokoro {
     @Volatile private var track: AudioTrack? = null
     private var unloadTask: java.util.concurrent.ScheduledFuture<*>? = null
 
+    /** Loudness of queued speech over time (one value per 20 ms), so the island can move with the voice. */
+    private class Envelope(val startMs: Long, val levels: FloatArray)
+    private val envelopes = java.util.concurrent.CopyOnWriteArrayList<Envelope>()
+
+    /** How loud the speech playing right now is, 0..1. */
+    fun level(): Float {
+        val now = SystemClock.elapsedRealtime()
+        for (e in envelopes) {
+            val i = ((now - e.startMs) / 20).toInt()
+            if (i in e.levels.indices) return e.levels[i]
+        }
+        return 0f
+    }
+
     /** Diagnostics: samples sent to the speaker for the most recent utterance, and the last error. */
     @Volatile var lastSamplesPlayed = 0L
         private set
@@ -74,6 +88,7 @@ object Kokoro {
         worker.execute {
             try {
                 lastSamplesPlayed = 0
+                envelopes.clear()
                 val out = audioTrack()
                 val player = Player(out, myGen)
                 val cached = cacheFile(app, text, speaker, speed).takeIf { it.exists() }?.let { readPcm(it) }
@@ -97,6 +112,7 @@ object Kokoro {
     /** Stop speaking now. */
     fun stop() {
         generation.incrementAndGet()
+        envelopes.clear()
         track?.let { runCatching { it.pause(); it.flush() } }
     }
 
@@ -133,6 +149,7 @@ object Kokoro {
         fun write(samples: FloatArray): Boolean {
             if (generation.get() != gen) return false
             if (!started) { out.play(); started = true }
+            recordEnvelope(maxOf(endAt, SystemClock.elapsedRealtime()), samples)
             out.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
             lastSamplesPlayed += samples.size
             // Track the end time on the wall clock rather than the playback head, which is
@@ -147,6 +164,19 @@ object Kokoro {
             while (generation.get() == gen && SystemClock.elapsedRealtime() < endAt + 120) Thread.sleep(20)
             if (generation.get() == gen) out.stop() // also plays out anything still buffered
         }
+    }
+
+    private fun recordEnvelope(startMs: Long, samples: FloatArray) {
+        val step = SAMPLE_RATE / 50 // 20 ms
+        val levels = FloatArray((samples.size + step - 1) / step) { i ->
+            var sum = 0f
+            val end = minOf(samples.size, (i + 1) * step)
+            for (j in i * step until end) sum += samples[j] * samples[j]
+            (kotlin.math.sqrt(sum / (end - i * step)) * 6f).coerceAtMost(1f)
+        }
+        val now = SystemClock.elapsedRealtime()
+        envelopes.removeAll { it.startMs + it.levels.size * 20L < now - 1000 }
+        envelopes += Envelope(startMs, levels)
     }
 
     private fun engine(context: Context): OfflineTts? {

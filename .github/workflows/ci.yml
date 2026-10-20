@@ -28,10 +28,10 @@ jobs:
           key: sherpa-onnx-${{ hashFiles('app/build.gradle.kts') }}
 
       - name: Unit tests and lint
-        run: ./gradlew testDebugUnitTest lintDebug
+        run: bash ./gradlew testDebugUnitTest lintDebug
 
       - name: Build APK
-        run: ./gradlew assembleDebug
+        run: bash ./gradlew assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:

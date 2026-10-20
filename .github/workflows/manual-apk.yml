@@ -19,9 +19,9 @@ jobs:
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
       - name: Check tests and lint
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug
+        run: bash ./gradlew --no-daemon testDebugUnitTest lintDebug
       - name: Build installable debug APK
-        run: ./gradlew --no-daemon assembleDebug
+        run: bash ./gradlew --no-daemon assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

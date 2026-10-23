@@ -78,4 +78,19 @@ class ArabicVoiceChatTest {
         assertTrue("Voice recognition must not send a message before review", chat.snapshot().messages.isEmpty())
         controller.pause().stop().destroy()
     }
+
+    @Test fun longRepliesAreSplitIntoLegalSpeechRequestsWithoutLosingText() {
+        ShadowTextToSpeech.addLanguageAvailability(Locale.forLanguageTag("ar-EG"))
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val speech = ArabicSpeech(context)
+        val text = "كلام عربي طويل. ".repeat(800)
+        speech.speak(text)
+        val tts = ShadowTextToSpeech.getLastTextToSpeechInstance()
+        shadowOf(tts).onInitListener.onInit(TextToSpeech.SUCCESS)
+        shadowOf(Looper.getMainLooper()).idle()
+        val parts = shadowOf(tts).spokenTextList
+        assertTrue("Android rejects synthesis input longer than its limit", parts.all { it.length <= TextToSpeech.getMaxSpeechInputLength() })
+        assertEquals(text, parts.joinToString(""))
+        speech.close()
+    }
 }

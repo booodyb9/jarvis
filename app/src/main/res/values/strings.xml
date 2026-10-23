@@ -1,3 +1,3 @@
 <resources>
-    <string name="accessibility_description">Lets Jarvis read what is on the screen and tap, type and scroll for you when you give it a voice command. Screen contents are sent to the AI provider you choose in the Jarvis app.</string>
+    <string name="accessibility_description">يعرض فقاعة المساعد ويقرأ عناصر الشاشة أثناء طلبك. نص الشاشة يُرسل إلى مزود AI الذي تختاره بعد موافقتك على المشاركة. كل ضغط أو تمرير أو رجوع يحتاج موافقة منفصلة، والصور تحتاج إذنًا إضافيًا لكل التقاط. يمكنك إيقاف المساعد أو تعطيل الخدمة في أي وقت.</string>
 </resources>

@@ -33,7 +33,7 @@ object ScreenReader {
                 "${windowType(w.type)} window: ${w.title ?: root.packageName}" to root
             }
         } else {
-            listOfNotNull(service.rootInActiveWindow?.let { "Active window: ${it.packageName}" to it })
+            listOfNotNull(service.rootInActiveWindow?.takeIf { it.packageName != service.packageName }?.let { "Active window: ${it.packageName}" to it })
                 .also { foreground = it.firstOrNull()?.second?.packageName?.toString() }
         }
 
@@ -58,8 +58,8 @@ object ScreenReader {
         val bounds = Rect().also { node.getBoundsInScreen(it) }
         if (!Rect.intersects(bounds, screen)) return
 
-        val text = node.text?.toString()?.clean()
-        val desc = node.contentDescription?.toString()?.clean()
+        val text = if (node.isPassword) "[حقل محمي]" else node.text?.toString()?.clean()
+        val desc = if (node.isPassword) null else node.contentDescription?.toString()?.clean()
         val hint = node.hintText?.toString()?.clean()
         val interesting = node.isClickable || node.isLongClickable || node.isEditable || node.isScrollable ||
             node.isCheckable || !text.isNullOrBlank() || !desc.isNullOrBlank()

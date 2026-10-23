@@ -51,6 +51,7 @@ class AnthropicSession(
     }
 
     private val history = mutableListOf<MessageParam>()
+    override fun cancel() { runCatching { (client as? AutoCloseable)?.close() } }
 
     override fun send(userText: String?, toolOutputs: List<ToolOutput>): AssistantTurn {
         val blocks = mutableListOf<ContentBlockParam>()

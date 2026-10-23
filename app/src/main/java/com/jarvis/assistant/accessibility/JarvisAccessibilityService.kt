@@ -29,28 +29,48 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     /** The task island shown at the top of the screen while Jarvis works. */
     val island by lazy { com.jarvis.assistant.ui.TaskIsland(this) }
+    val arabic by lazy { com.jarvis.assistant.arabic.ArabicAssistant(this) }
+    fun lastSnapshot(): ScreenSnapshot? = snapshot
+    @Volatile var screenRevision = 0L
+        private set
+    @Volatile var observedRevision = 0L
+        private set
+    @Volatile var observedProof = ""
+        private set
 
     override fun onServiceConnected() {
         instance = this
         // An enabled accessibility service is a good moment to make sure the listener is running.
-        if (Settings(this).wakeWordEnabled) runCatching { JarvisService.startIfSwitchedOn(this) }
+        // The Arabic assistant is explicitly started by the user; no hot microphone at boot.
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
-    override fun onInterrupt() = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null && event.packageName != null && event.packageName?.toString() != packageName && event.eventType in setOf(
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+                AccessibilityEvent.TYPE_WINDOWS_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED)) {
+            screenRevision++
+            arabic.screenChanged()
+        }
+    }
+    override fun onInterrupt() { arabic.stop() }
 
     override fun onDestroy() {
         runCatching { island.hide() }
+        arabic.close()
         if (instance === this) instance = null
         super.onDestroy()
     }
 
     // ---- Observation ----
 
-    fun readScreen(): ScreenSnapshot = ScreenReader.capture(this).also { snapshot = it }
+    fun readScreen(): ScreenSnapshot = ScreenReader.capture(this).also {
+        snapshot = it
+        observedRevision = screenRevision
+        observedProof = com.jarvis.assistant.arabic.ScreenProof.of(it)
+    }
 
     private fun element(id: Int): AccessibilityNodeInfo =
-        snapshot?.elements?.get(id)?.also { it.refresh() }
+        snapshot?.elements?.get(id)?.takeIf { it.refresh() && it.isVisibleToUser && it.isEnabled && !it.isPassword }
             ?: throw IllegalArgumentException("No element [$id] on the last screen read. Use ids from the latest screen.")
 
     /** Screenshot as JPEG, scaled so its width is at most [maxWidth]. Returns bytes and the scale used. */
@@ -88,9 +108,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         var target: AccessibilityNodeInfo? = node
         while (target != null && !target.isClickable) target = target.parent
         if (target != null && target.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return "Tapped [$id]."
-        val b = Rect().also { node.getBoundsInScreen(it) }
-        return if (tapAt(b.centerX().toFloat(), b.centerY().toFloat())) "Tapped [$id] at (${b.centerX()},${b.centerY()})."
-        else "Tap on [$id] failed."
+        return "Tap failed. Ask the user to select the correct target; do not guess coordinates."
     }
 
     fun longPress(id: Int): String {
@@ -98,8 +116,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         var target: AccessibilityNodeInfo? = node
         while (target != null && !target.isLongClickable) target = target.parent
         if (target != null && target.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)) return "Long-pressed [$id]."
-        val b = Rect().also { node.getBoundsInScreen(it) }
-        return if (gesture(path(b.exactCenterX(), b.exactCenterY()), 800)) "Long-pressed [$id]." else "Long press failed."
+        return "Long press failed. Ask the user to select the target."
     }
 
     fun typeText(id: Int?, text: String, submit: Boolean): String {
@@ -120,14 +137,16 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     fun scroll(id: Int?, direction: String): String {
-        if (id != null) {
-            var target: AccessibilityNodeInfo? = element(id)
+        val scrollId = id ?: snapshot?.elements?.entries?.singleOrNull { it.value.isScrollable }?.key
+        if (scrollId != null) {
+            var target: AccessibilityNodeInfo? = element(scrollId)
             while (target != null && !target.isScrollable) target = target.parent
             val action = if (direction == "down" || direction == "right") AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
             else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
             if (target != null && target.performAction(action)) return "Scrolled $direction."
         }
-        // Fall back to a swipe in the middle of the screen. Content moves opposite to the finger.
+        return "No unambiguous scrollable element. Ask the user to select a list or scroll manually."
+        /* Coordinate fallback is intentionally unavailable in the consent-based assistant.
         val m = resources.displayMetrics
         val cx = m.widthPixels / 2f
         val cy = m.heightPixels / 2f
@@ -139,7 +158,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             "right" -> swipe(cx + dx, cy, cx - dx, cy, 350)
             else -> swipe(cx - dx, cy, cx + dx, cy, 350)
         }
-        return if (ok) "Swiped to scroll $direction." else "Scroll failed."
+        return if (ok) "Swiped to scroll $direction." else "Scroll failed." */
     }
 
     fun tapAt(x: Float, y: Float): Boolean = gesture(path(x, y), 60)
@@ -168,8 +187,6 @@ class JarvisAccessibilityService : AccessibilityService() {
             .distinctBy { it.second }
         val q = name.trim().lowercase()
         val match = apps.firstOrNull { it.first.lowercase() == q || it.second.lowercase() == q }
-            ?: apps.firstOrNull { it.first.lowercase().startsWith(q) }
-            ?: apps.firstOrNull { it.first.lowercase().contains(q) || q.contains(it.first.lowercase()) }
             ?: return "No installed app matches '$name'. Installed apps include: " +
                 apps.map { it.first }.sorted().take(80).joinToString(", ")
         val intent = pm.getLaunchIntentForPackage(match.second)

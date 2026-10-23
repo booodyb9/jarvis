@@ -73,7 +73,7 @@ class Settings(context: Context) {
 
     /** Whether the model may request screenshots (needs a vision-capable model and Android 11+). */
     var allowScreenshots: Boolean
-        get() = prefs.getBoolean("screenshots", true)
+        get() = prefs.getBoolean("screenshots", false)
         set(v) = prefs.edit().putBoolean("screenshots", v).apply()
 
     var wakeWordEnabled: Boolean

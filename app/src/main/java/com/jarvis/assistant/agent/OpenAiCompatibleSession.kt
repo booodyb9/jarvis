@@ -39,6 +39,7 @@ class OpenAiCompatibleSession(
     }
 
     private val messages = mutableListOf(JSONObject().put("role", "system").put("content", system))
+    override fun cancel() { http.dispatcher.cancelAll() }
 
     override fun send(userText: String?, toolOutputs: List<ToolOutput>): AssistantTurn {
         val images = mutableListOf<ByteArray>()

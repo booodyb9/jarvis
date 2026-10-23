@@ -30,6 +30,7 @@ data class AssistantTurn(
  * format, which matters for providers (like Claude) whose responses must be replayed verbatim.
  */
 interface ChatSession {
+    fun cancel() = Unit
     /** Send the initial user message, or tool outputs for the previous turn's tool calls. */
     fun send(userText: String?, toolOutputs: List<ToolOutput>): AssistantTurn
 }

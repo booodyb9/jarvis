@@ -14,8 +14,8 @@ android {
         applicationId = "com.jarvis.assistant"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0-arabic-preview"
         // sherpa-onnx ships large native libraries. Nearly every phone from the last
         // several years is arm64; add "armeabi-v7a" (old 32-bit phones) or "x86_64" (emulator) if needed.
         ndk { abiFilters += listOf("arm64-v8a") }

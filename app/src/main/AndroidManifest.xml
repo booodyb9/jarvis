@@ -28,20 +28,27 @@
     <application
         android:name=".JarvisApp"
         android:allowBackup="false"
-        android:label="Jarvis"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="مساعدك"
+        android:supportsRtl="true"
+        android:icon="@drawable/ic_mosaedak"
+        android:roundIcon="@drawable/ic_mosaedak"
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.Jarvis">
 
-        <activity
-            android:name=".ui.MainActivity"
-            android:exported="true"
-            android:launchMode="singleTask">
+        <activity android:name=".arabic.ArabicHomeActivity" android:exported="true"
+            android:theme="@style/Theme.Mosaedak" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <activity android:name=".arabic.ArabicVoiceActivity" android:exported="false"
+            android:theme="@style/Theme.Mosaedak" android:excludeFromRecents="true" />
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="false"
+            android:launchMode="singleTask">
         </activity>
 
         <activity
@@ -61,7 +68,7 @@
         <service
             android:name=".accessibility.JarvisAccessibilityService"
             android:exported="true"
-            android:label="Jarvis phone control"
+            android:label="مساعدك — التحكم بموافقتك"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -73,6 +80,7 @@
 
         <receiver
             android:name=".service.BootReceiver"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

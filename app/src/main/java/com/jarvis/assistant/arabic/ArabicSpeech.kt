@@ -40,8 +40,20 @@ class ArabicSpeech(context: Context, private val notice: (String) -> Unit = {}) 
     private fun flush() {
         val text = pending ?: return
         pending = null
-        val result = engine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "arabic-" + ++generation)
-        if (result == TextToSpeech.ERROR) notice("تعذّر تشغيل الصوت؛ الرد المكتوب موجود.")
+        val limit = TextToSpeech.getMaxSpeechInputLength()
+        val id = ++generation
+        var start = 0
+        while (start < text.length && id == generation && !closed) {
+            var end = minOf(text.length, start + limit)
+            if (end < text.length && Character.isHighSurrogate(text[end - 1]) && Character.isLowSurrogate(text[end])) end--
+            val result = engine?.speak(text.substring(start, end),
+                if (start == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD,
+                null, "arabic-" + id + "-" + start)
+            if (result == TextToSpeech.ERROR) {
+                engine?.stop(); notice("تعذّر تشغيل الصوت؛ الرد المكتوب موجود."); break
+            }
+            start = end
+        }
     }
 
     fun stop() { generation++; pending = null; engine?.stop() }

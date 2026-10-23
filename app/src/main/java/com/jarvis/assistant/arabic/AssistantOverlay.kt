@@ -32,6 +32,9 @@ class AssistantOverlay(private val service: AccessibilityService) {
     private var chatTab: Button? = null
     private var screenTab: Button? = null
     private var panelStatus: TextView? = null
+    private var panelTitle: TextView? = null
+    private var compactPanel = false
+    private var descriptionScroll: ScrollView? = null
     private val prefs = service.getSharedPreferences("arabic_overlay", 0)
     var onSend: (String) -> Unit = {}
     var onTalk: () -> Unit = {}
@@ -41,6 +44,7 @@ class AssistantOverlay(private val service: AccessibilityService) {
     var onExecute: () -> Unit = {}
     var onGuide: () -> Unit = {}
     var onClose: () -> Unit = {}
+    var onLeaveScreen: () -> Unit = {}
 
     private fun dp(n: Int) = GlassUi.dp(service, n)
     private fun params(width: Int, height: Int, focus: Boolean = false) = WindowManager.LayoutParams(
@@ -92,18 +96,43 @@ class AssistantOverlay(private val service: AccessibilityService) {
         chatTab?.setTextColor(if (screenMode) GlassUi.MUTED else GlassUi.TEAL)
         screenTab?.setTextColor(if (screenMode) GlassUi.TEAL else GlassUi.MUTED)
         panelStatus?.text = if (screenMode) "كل خطوة بموافقتك" else "صوت وكتابة، في نفس المحادثة"
+        panelTitle?.text = if (compactPanel) { if (screenMode) "الشاشة ▾" else "دردشة ▾" } else "مساعدك"
     }
 
     fun open() {
         if (panel != null) { renderMode(); return }
         showBubble()
-        val root = GlassUi.column(service).apply {
+        var headerView: View? = null
+        var tabsView: View? = null
+        val root = object : LinearLayout(service) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val height = MeasureSpec.getSize(heightMeasureSpec)
+                compactPanel = height < dp(420)
+                panelStatus?.visibility = if (compactPanel) View.GONE else View.VISIBLE
+                tabsView?.visibility = if (height < dp(300)) View.GONE else View.VISIBLE
+                headerView?.visibility = if (height < dp(160)) View.GONE else View.VISIBLE
+                setPadding(dp(12), dp(if (compactPanel) 6 else 16), dp(12), dp(if (compactPanel) 6 else 16))
+                panelTitle?.let {
+                    val label = if (compactPanel) { if (screenMode) "الشاشة ▾" else "دردشة ▾" } else "مساعدك"
+                    if (it.text.toString() != label) it.text = label
+                    it.textSize = if (compactPanel) 16f else 21f
+                }
+                proposal?.setPadding(dp(8), dp(if (compactPanel) 6 else 16), dp(8), dp(if (compactPanel) 6 else 16))
+                descriptionScroll?.layoutParams?.height = dp(if (height < dp(300)) 56 else if (compactPanel) 84 else 112)
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+        }.apply {
+            orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL
             background = GlassUi.bg(radius = dp(28).toFloat()); elevation = dp(12).toFloat()
         }
         val head = LinearLayout(service).apply { gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
         head.addView(RobotView(service), LinearLayout.LayoutParams(dp(40), dp(40)))
         val title = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
-        title.addView(GlassUi.text(service, "مساعدك", 21f))
+        panelTitle = GlassUi.text(service, "مساعدك", 21f).apply {
+            contentDescription = "تبديل بين الدردشة ومساعدة الشاشة"
+            setOnClickListener { if (screenMode) onLeaveScreen(); screenMode = !screenMode; renderMode() }
+        }
+        title.addView(panelTitle)
         panelStatus = GlassUi.text(service, "", 11f, GlassUi.MUTED).also { title.addView(it) }
         head.addView(title, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
         head.addView(GlassUi.button(service, "↗") {
@@ -113,12 +142,14 @@ class AssistantOverlay(private val service: AccessibilityService) {
         }.apply { contentDescription = "افتح الدردشة في التطبيق" }, LinearLayout.LayoutParams(dp(48), dp(48)))
         head.addView(GlassUi.button(service, "×") { onClose() }.apply { contentDescription = "تصغير الفقاعة" },
             LinearLayout.LayoutParams(dp(48), dp(48)))
+        headerView = head
         root.addView(head)
         val tabs = LinearLayout(service)
-        chatTab = GlassUi.button(service, "دردشة") { if (screenMode) onStop(); screenMode = false; renderMode() }
+        chatTab = GlassUi.button(service, "دردشة") { if (screenMode) onLeaveScreen(); screenMode = false; renderMode() }
         screenTab = GlassUi.button(service, "الشاشة") { screenMode = true; renderMode() }
         tabs.addView(chatTab, LinearLayout.LayoutParams(0, dp(48), 1f))
         tabs.addView(screenTab, LinearLayout.LayoutParams(0, dp(48), 1f))
+        tabsView = tabs
         root.addView(tabs)
         val body = FrameLayout(service)
         chatPage = ConversationView(service).apply {
@@ -158,10 +189,23 @@ class AssistantOverlay(private val service: AccessibilityService) {
         if (Build.VERSION.SDK_INT >= 30) {
             root.setOnApplyWindowInsetsListener { _, insets ->
                 val bottom = insets.getInsets(WindowInsets.Type.ime() or WindowInsets.Type.systemBars()).bottom
-                val available = (m.heightPixels - bottom - dp(48)).coerceAtLeast(dp(240))
+                val available = (m.heightPixels - bottom - dp(48)).coerceAtLeast(dp(120))
                 val height = min(normalHeight, available)
                 if (p.height != height) { p.height = height; if (panel === root) runCatching { wm.updateViewLayout(root, p) } }
                 insets
+            }
+        }
+        if (Build.VERSION.SDK_INT < 30) {
+            root.viewTreeObserver.addOnGlobalLayoutListener {
+                val frame = Rect()
+                root.getWindowVisibleDisplayFrame(frame)
+                if (frame.height() > 0) {
+                    val height = min(normalHeight, (frame.bottom - dp(48)).coerceAtLeast(dp(120)))
+                    if (p.height != height && panel === root) {
+                        p.height = height
+                        runCatching { wm.updateViewLayout(root, p) }
+                    }
+                }
             }
         }
         runCatching { wm.addView(root, p); panel = root; setBusy(busy); renderMode() }
@@ -169,14 +213,24 @@ class AssistantOverlay(private val service: AccessibilityService) {
 
     fun status(text: String) { cachedStatus = text; reply?.text = text; bubble?.contentDescription = "مساعدك — " + text }
     fun setInput(text: String) { cachedInput = text; input?.setText(text) }
-    fun setBusy(value: Boolean) { busy = value; editor?.visibility = if (value) View.GONE else View.VISIBLE }
+    fun setBusy(value: Boolean) {
+        busy = value
+        if (value) input?.let {
+            it.clearFocus()
+            service.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(it.windowToken, 0)
+        }
+        editor?.visibility = if (value) View.GONE else View.VISIBLE
+    }
     fun ask(text: String) { openScreen(); status(text); editor?.visibility = View.VISIBLE }
     fun propose(text: String, bounds: Rect?) {
         openScreen(); status("بانتظار موافقتك")
         proposal?.apply {
             removeAllViews(); visibility = View.VISIBLE
-            addView(GlassUi.text(service, text, 18f))
-            addView(GlassUi.text(service, "موافقتك للفعل المعروض فقط — تنتهي بعد دقيقة", 14f, GlassUi.MUTED))
+            val description = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
+            description.addView(GlassUi.text(service, text, 18f))
+            description.addView(GlassUi.text(service, "موافقتك للفعل المعروض فقط — تنتهي بعد دقيقة", 13f, GlassUi.MUTED))
+            descriptionScroll = ScrollView(service).apply { addView(description) }
+            addView(descriptionScroll, LinearLayout.LayoutParams(-1, dp(112)))
             val row = LinearLayout(service).apply { layoutDirection = View.LAYOUT_DIRECTION_RTL }
             row.addView(GlassUi.button(service, "نفّذ مرة", true) { onExecute() }.apply { filterTouchesWhenObscured = true }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(4) })
             row.addView(GlassUi.button(service, "ورّيني") { onGuide() }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -185,12 +239,12 @@ class AssistantOverlay(private val service: AccessibilityService) {
         bounds?.let { showMark(it) }
         screenScroll?.smoothScrollTo(0, 0)
     }
-    fun clearProposal() { proposal?.removeAllViews(); proposal?.visibility = View.GONE; clearHighlights() }
+    fun clearProposal() { proposal?.removeAllViews(); proposal?.visibility = View.GONE; descriptionScroll = null; clearHighlights() }
     fun guide(text: String) { status(text); collapse() }
     fun collapse() {
         cachedInput = input?.text?.toString() ?: cachedInput
         panel?.let { runCatching { wm.removeView(it) } }; panel = null; input = null; reply = null; editor = null; proposal = null
-        chatPage = null; screenPage = null; screenScroll = null; chatTab = null; screenTab = null; panelStatus = null
+        chatPage = null; screenPage = null; screenScroll = null; chatTab = null; screenTab = null; panelStatus = null; panelTitle = null; descriptionScroll = null
     }
     fun clearHighlights() {
         marker?.let { runCatching { wm.removeView(it) } }; marker = null

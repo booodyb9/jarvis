@@ -24,6 +24,8 @@ class ChatConversation private constructor(private val app: Context) {
     private val worker = Executors.newSingleThreadExecutor()
     private val epoch = AtomicLong()
     private val listeners = linkedSetOf<(State) -> Unit>()
+    private val clearListeners = linkedSetOf<() -> Unit>()
+    private var speechChannel = "chat"
     private val messages = mutableListOf<Message>()
     @Volatile private var activeSession: ChatSession? = null
     private var busy = false
@@ -58,6 +60,11 @@ class ChatConversation private constructor(private val app: Context) {
         return { listeners -= listener }
     }
 
+    fun onClear(listener: () -> Unit): () -> Unit {
+        clearListeners += listener
+        return { clearListeners -= listener }
+    }
+
     private fun emit() { val state = snapshot(); listeners.toList().forEach { it(state) } }
 
     private fun add(role: String, text: String, channel: String = "chat", model: String = "") {
@@ -80,8 +87,8 @@ class ChatConversation private constructor(private val app: Context) {
 
     fun recordScreen(role: String, text: String) { add(role, text, "screen"); emit() }
 
-    fun speak(text: String) = speech.speak(text)
-    fun stopSpeech() = speech.stop()
+    fun speak(text: String, channel: String = "chat") { speechChannel = channel; speech.speak(text) }
+    fun stopSpeech(channel: String? = null) { if (channel == null || channel == speechChannel) speech.stop() }
 
     /** Cancels the request identity before cancelling transport: late callbacks are inert. */
     fun cancel() {
@@ -94,6 +101,7 @@ class ChatConversation private constructor(private val app: Context) {
 
     fun clear() {
         cancel()
+        clearListeners.toList().forEach { it() }
         messages.clear(); draft = ""; modelName = ""
         prefs.edit().remove("history").apply()
         status = "محادثة جديدة"; emit()
@@ -139,7 +147,7 @@ class ChatConversation private constructor(private val app: Context) {
                         status = "تم الرد"
                         add("assistant", turn.text, model = profile.name)
                         emit()
-                        if (autoSpeak) speech.speak(turn.text)
+                        if (autoSpeak) speak(turn.text)
                     }
                     return@execute
                 } catch (e: Exception) { failure = e }

@@ -26,7 +26,9 @@ class ArabicHomeActivity : AppCompatActivity() {
             AlertDialog.Builder(this).setTitle("محادثة جديدة؟").setMessage("هنوقف الرد الجاري ونمسح سجل المحادثة من الجهاز.")
                 .setPositiveButton("ابدأ جديد") { _, _ -> ChatConversation.get(this).clear() }.setNegativeButton("إلغاء", null).show()
         }
-        root.addView(newChat)
+        newChat.text = "جديد"
+        newChat.contentDescription = "محادثة جديدة"
+        header.addView(newChat, LinearLayout.LayoutParams(GlassUi.dp(this, 64), GlassUi.dp(this, 52)))
         val chat = ConversationView(this).apply {
             onTalk = { startActivity(Intent(this@ArabicHomeActivity, ArabicVoiceActivity::class.java)
                 .putExtra(ArabicVoiceActivity.EXTRA_DESTINATION, ArabicVoiceActivity.DEST_HOME)) }

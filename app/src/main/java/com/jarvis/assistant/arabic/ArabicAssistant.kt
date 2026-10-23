@@ -33,6 +33,7 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     private var selection = ""
     private var hint: Rect? = null
     private var hintProof = ""
+    private var removeClearListener: (() -> Unit)? = null
 
     private class Pending(val id: Long, val ticket: ConsentTicket, val proof: String, val revision: Long,
         val action: () -> String, val result: CountDownLatch = CountDownLatch(1)) {
@@ -45,11 +46,13 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     }
 
     init {
+        removeClearListener = chat.onClear { stop(cancelChat = false) }
         overlay.onSend = { text -> submit(text) }
         overlay.onStop = { stop() }
         overlay.onTalk = {
             val destination = if (overlay.isChat) ArabicVoiceActivity.DEST_CHAT_OVERLAY else ArabicVoiceActivity.DEST_SCREEN
-            stop()
+            stop(cancelChat = false)
+            chat.stopSpeech()
             overlay.collapse()
             service.startActivity(Intent(service, ArabicVoiceActivity::class.java)
                 .putExtra(ArabicVoiceActivity.EXTRA_DESTINATION, destination).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -58,7 +61,8 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
         overlay.onSpeak = { speak(lastReply) }
         overlay.onExecute = { executeOnce() }
         overlay.onGuide = { guideOnly() }
-        overlay.onClose = { if (!overlay.isChat) stop(); overlay.collapse() }
+        overlay.onLeaveScreen = { stop(cancelChat = false) }
+        overlay.onClose = { if (!overlay.isChat) stop(cancelChat = false); overlay.collapse() }
     }
 
     fun enable() {
@@ -75,7 +79,7 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     fun disable() { enabled = false; stop(); overlay.hide() }
     fun configurationChanged() {
         val wasEnabled = enabled
-        stop(); overlay.hide()
+        stop(cancelChat = false); overlay.hide()
         if (wasEnabled) overlay.showBubble()
     }
     fun reviewVoice(text: String) {
@@ -83,18 +87,25 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
         enable(); overlay.openScreen(); overlay.setInput(text)
         overlay.status("راجع الكلام، وبعدها اضغط إرسال")
     }
-    fun stop() {
+    fun stop(cancelChat: Boolean = true) {
         epoch.incrementAndGet()
         activeSession?.cancel(); activeSession = null
         pending?.let { it.ticket.revoke(); it.error = "تم الإيقاف"; it.result.countDown() }; pending = null
         question?.latch?.countDown(); question = null
-        chat.cancel()
-        ArabicVoiceActivity.current?.cancel()
+        if (cancelChat) chat.cancel() else chat.stopSpeech("screen")
+        ArabicVoiceActivity.current?.let {
+            if (cancelChat || it.intent.getStringExtra(ArabicVoiceActivity.EXTRA_DESTINATION) == ArabicVoiceActivity.DEST_SCREEN)
+                it.cancel()
+        }
         busy = false; hint = null; selection = ""
         overlay.clearHighlights(); overlay.clearProposal(); overlay.setBusy(false)
         overlay.status("متوقف — اضغط إرسال لطلب جديد")
     }
-    fun close() { closed = true; disable(); worker.shutdownNow() }
+    fun close() {
+        closed = true; enabled = false
+        removeClearListener?.invoke(); removeClearListener = null
+        stop(cancelChat = false); overlay.hide(); worker.shutdownNow()
+    }
 
     fun screenChanged() {
         if (!enabled) return
@@ -149,7 +160,7 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
                 lastReply = result.getOrNull()?.summary ?: "حصل خطأ في الاتصال. راجع إعدادات النموذج وحاول تاني."
                 chat.recordScreen(if (result.isSuccess) "assistant" else "error", lastReply)
                 overlay.openScreen(); overlay.status(lastReply)
-                if (chat.autoSpeak) chat.speak(lastReply)
+                if (chat.autoSpeak) chat.speak(lastReply, "screen")
             }
         }
     }
@@ -258,5 +269,5 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
         else -> error("الفعل ده غير مسموح")
     }
 
-    private fun speak(text: String) { chat.speak(text) }
+    private fun speak(text: String) { chat.speak(text, "screen") }
 }

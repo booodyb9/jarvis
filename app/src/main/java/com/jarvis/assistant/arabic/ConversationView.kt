@@ -22,6 +22,8 @@ class ConversationView(context: Context) : LinearLayout(context) {
     private val send = GlassUi.button(context, "إرسال", true) { chat.send(input.text.toString()) }
     private val stop = GlassUi.button(context, "إيقاف", stop = true) { chat.cancel() }
     private val microphone = GlassUi.button(context, "اتكلم") { onTalk() }
+    private val actionRow = LinearLayout(context)
+    private val optionsRow = LinearLayout(context)
     private val autoVoice = Switch(context).apply { text = "رد صوتي تلقائي"; textSize = 13f; setTextColor(GlassUi.MUTED) }
     private var unsubscribe: (() -> Unit)? = null
     private var rendering = false
@@ -35,7 +37,7 @@ class ConversationView(context: Context) : LinearLayout(context) {
         addView(model)
         addView(scroll, LayoutParams(-1, 0, 1f))
         addView(status)
-        val options = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+        val options = optionsRow.apply { gravity = Gravity.CENTER_VERTICAL }
         options.addView(autoVoice, LayoutParams(0, GlassUi.dp(context, 48), 1f))
         options.addView(GlassUi.button(context, "الشاشة") { onScreen() }, LayoutParams(GlassUi.dp(context, 88), GlassUi.dp(context, 48)))
         addView(options)
@@ -55,13 +57,29 @@ class ConversationView(context: Context) : LinearLayout(context) {
             })
         }
         addView(input, LayoutParams(-1, -2))
-        val row = LinearLayout(context)
+        val row = actionRow
         row.addView(send, LayoutParams(0, GlassUi.dp(context, 52), 1f).apply { marginEnd = GlassUi.dp(context, 6) })
         row.addView(microphone, LayoutParams(GlassUi.dp(context, 74), GlassUi.dp(context, 52)).apply { marginEnd = GlassUi.dp(context, 6) })
         row.addView(stop, LayoutParams(GlassUi.dp(context, 74), GlassUi.dp(context, 52)))
         addView(row)
         autoVoice.setOnCheckedChangeListener { _, enabled -> if (!rendering) chat.autoSpeak = enabled }
         render(chat.snapshot())
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val compact = MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED &&
+            MeasureSpec.getSize(heightMeasureSpec) < GlassUi.dp(context, 350)
+        model.visibility = if (compact) GONE else VISIBLE
+        status.visibility = if (compact) GONE else VISIBLE
+        optionsRow.visibility = if (compact) GONE else VISIBLE
+        input.maxLines = if (compact) 1 else 4
+        input.minHeight = GlassUi.dp(context, if (compact) 48 else 52)
+        input.setPadding(GlassUi.dp(context, 12), GlassUi.dp(context, if (compact) 8 else 12),
+            GlassUi.dp(context, 12), GlassUi.dp(context, if (compact) 8 else 12))
+        for (i in 0 until actionRow.childCount) {
+            actionRow.getChildAt(i).layoutParams.height = GlassUi.dp(context, if (compact) 48 else 52)
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
     override fun onAttachedToWindow() {

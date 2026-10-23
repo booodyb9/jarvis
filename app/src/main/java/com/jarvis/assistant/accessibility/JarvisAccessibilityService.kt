@@ -52,7 +52,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             arabic.screenChanged()
         }
     }
-    override fun onInterrupt() { arabic.stop() }
+    override fun onInterrupt() { arabic.stop(cancelChat = false) }
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         arabic.configurationChanged()

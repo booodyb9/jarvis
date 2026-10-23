@@ -66,7 +66,7 @@ class ArabicSettingsActivity : AppCompatActivity() {
             textSize = 15f; setTextColor(GlassUi.INK); isChecked = consent.getBoolean("screen_text", false)
             setOnCheckedChangeListener { _, checked ->
                 consent.edit().putBoolean("screen_text", checked).apply()
-                if (!checked) JarvisAccessibilityService.instance?.arabic?.stop()
+                if (!checked) JarvisAccessibilityService.instance?.arabic?.stop(cancelChat = false)
             }
         })
         column.addView(GlassUi.text(this, "الدردشة العادية لا تقرأ الشاشة. وضع الشاشة يشارك العناصر الظاهرة أثناء الطلب، ويحجب حقول كلمات المرور من النص.", 13f, GlassUi.MUTED))

@@ -128,6 +128,16 @@ class ArabicUiTest {
         activity.finish()
         val service = Robolectric.buildService(JarvisAccessibilityService::class.java).create().get()
         val overlay = AssistantOverlay(service); overlay.open()
+        run {
+            val chatPanel = roots(service).last()
+            val cw = GlassUi.dp(service, 336); val ch = GlassUi.dp(service, 544)
+            chatPanel.measure(View.MeasureSpec.makeMeasureSpec(cw, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(ch, View.MeasureSpec.EXACTLY))
+            chatPanel.layout(0, 0, cw, ch)
+            val chatBitmap = Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888)
+            chatPanel.draw(Canvas(chatBitmap))
+            File(folder, "chat-360.png").outputStream().use { chatBitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            chatBitmap.recycle()
+        }
         overlay.propose("افتح النظام والتحديثات", null)
         val panel = roots(service).last()
         val w = GlassUi.dp(service, 336); val h = GlassUi.dp(service, 544)

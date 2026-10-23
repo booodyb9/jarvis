@@ -22,7 +22,7 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     private val worker = Executors.newSingleThreadExecutor()
     private val epoch = AtomicLong()
     private val overlay = AssistantOverlay(service)
-    private var voice: android.speech.tts.TextToSpeech? = null
+    private val chat by lazy { ChatConversation.get(service) }
     @Volatile private var activeSession: ChatSession? = null
     @Volatile private var pending: Pending? = null
     @Volatile private var question: Question? = null
@@ -33,6 +33,7 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     private var selection = ""
     private var hint: Rect? = null
     private var hintProof = ""
+    private var removeClearListener: (() -> Unit)? = null
 
     private class Pending(val id: Long, val ticket: ConsentTicket, val proof: String, val revision: Long,
         val action: () -> String, val result: CountDownLatch = CountDownLatch(1)) {
@@ -45,47 +46,66 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     }
 
     init {
+        removeClearListener = chat.onClear { stop(cancelChat = false) }
         overlay.onSend = { text -> submit(text) }
         overlay.onStop = { stop() }
         overlay.onTalk = {
-            stop()
-            service.startActivity(Intent(service, ArabicVoiceActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val destination = if (overlay.isChat) ArabicVoiceActivity.DEST_CHAT_OVERLAY else ArabicVoiceActivity.DEST_SCREEN
+            stop(cancelChat = false)
+            chat.stopSpeech()
+            overlay.collapse()
+            service.startActivity(Intent(service, ArabicVoiceActivity::class.java)
+                .putExtra(ArabicVoiceActivity.EXTRA_DESTINATION, destination).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
         overlay.onSelect = { selectRegion() }
         overlay.onSpeak = { speak(lastReply) }
         overlay.onExecute = { executeOnce() }
         overlay.onGuide = { guideOnly() }
-        overlay.onClose = { stop(); overlay.collapse() }
+        overlay.onLeaveScreen = { stop(cancelChat = false) }
+        overlay.onClose = { if (!overlay.isChat) stop(cancelChat = false); overlay.collapse() }
     }
 
     fun enable() {
-        if (closed || !service.getSharedPreferences("arabic_consent", 0).getBoolean("screen_text", false)) return
+        if (closed) return
         enabled = true
         overlay.showBubble()
+    }
+    fun openChat() { enable(); overlay.openChat() }
+    fun openScreen() {
+        enable(); overlay.openScreen()
+        if (!service.getSharedPreferences("arabic_consent", 0).getBoolean("screen_text", false))
+            overlay.status("فعّل إذن مشاركة نص الشاشة من إعدادات التطبيق لاستخدام وضع الشاشة.")
     }
     fun disable() { enabled = false; stop(); overlay.hide() }
     fun configurationChanged() {
         val wasEnabled = enabled
-        stop(); overlay.hide()
+        stop(cancelChat = false); overlay.hide()
         if (wasEnabled) overlay.showBubble()
     }
     fun reviewVoice(text: String) {
         if (closed || !service.getSharedPreferences("arabic_consent", 0).getBoolean("screen_text", false)) return
-        enable(); overlay.open(); overlay.setInput(text)
+        enable(); overlay.openScreen(); overlay.setInput(text)
         overlay.status("راجع الكلام، وبعدها اضغط إرسال")
     }
-    fun stop() {
+    fun stop(cancelChat: Boolean = true) {
         epoch.incrementAndGet()
         activeSession?.cancel(); activeSession = null
         pending?.let { it.ticket.revoke(); it.error = "تم الإيقاف"; it.result.countDown() }; pending = null
         question?.latch?.countDown(); question = null
-        voice?.stop()
-        ArabicVoiceActivity.current?.cancel()
+        if (cancelChat) chat.cancel() else chat.stopSpeech("screen")
+        ArabicVoiceActivity.current?.let {
+            if (cancelChat || it.intent.getStringExtra(ArabicVoiceActivity.EXTRA_DESTINATION) == ArabicVoiceActivity.DEST_SCREEN)
+                it.cancel()
+        }
         busy = false; hint = null; selection = ""
         overlay.clearHighlights(); overlay.clearProposal(); overlay.setBusy(false)
         overlay.status("متوقف — اضغط إرسال لطلب جديد")
     }
-    fun close() { closed = true; disable(); voice?.shutdown(); worker.shutdownNow() }
+    fun close() {
+        closed = true; enabled = false
+        removeClearListener?.invoke(); removeClearListener = null
+        stop(cancelChat = false); overlay.hide(); worker.shutdownNow()
+    }
 
     fun screenChanged() {
         if (!enabled) return
@@ -104,11 +124,12 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
         if (!service.getSharedPreferences("arabic_consent", 0).getBoolean("screen_text", false)) {
             overlay.status("راجع إذن مشاركة نص الشاشة من إعدادات التطبيق الأول"); return
         }
-        question?.let { q -> q.answer = text; q.latch.countDown(); question = null; overlay.setInput(""); return }
+        question?.let { q -> chat.recordScreen("user", text); q.answer = text; q.latch.countDown(); question = null; overlay.setInput(""); return }
         if (busy) { overlay.status("في طلب شغال؛ اضغط إيقاف قبل طلب جديد"); return }
         if (Settings(service).modelsInOrder().isEmpty()) {
             overlay.status("أضف نموذج AI من إعدادات التطبيق الأول"); return
         }
+        chat.recordScreen("user", text)
         val id = epoch.incrementAndGet(); busy = true; overlay.setBusy(true); overlay.clearHighlights()
         overlay.setInput(""); overlay.status("بفهم طلبك…")
         val task = text + if (selection.isNotBlank()) "\nالمستخدم حدد هذا الجزء للسؤال عنه: $selection" else ""
@@ -124,7 +145,7 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
                 override fun status(text: String) { main.post { if (!isCancelled) overlay.status("براجع الخطوة المناسبة…") } }
                 override fun ask(question: String): String? {
                     val q = Question(id)
-                    main.post { if (!isCancelled) { this@ArabicAssistant.question = q; overlay.ask(question) } else q.latch.countDown() }
+                    main.post { if (!isCancelled) { this@ArabicAssistant.question = q; chat.recordScreen("assistant", question); overlay.ask(question) } else q.latch.countDown() }
                     while (!q.latch.await(100, TimeUnit.MILLISECONDS)) {
                         if (isCancelled) return null
                     }
@@ -137,7 +158,9 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
                 if (id != epoch.get() || closed) return@post
                 busy = false; activeSession = null; overlay.setBusy(false); overlay.clearProposal()
                 lastReply = result.getOrNull()?.summary ?: "حصل خطأ في الاتصال. راجع إعدادات النموذج وحاول تاني."
-                overlay.open(); overlay.status(lastReply)
+                chat.recordScreen(if (result.isSuccess) "assistant" else "error", lastReply)
+                overlay.openScreen(); overlay.status(lastReply)
+                if (chat.autoSpeak) chat.speak(lastReply, "screen")
             }
         }
     }
@@ -246,18 +269,5 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
         else -> error("الفعل ده غير مسموح")
     }
 
-    private fun speak(text: String) {
-        if (voice == null) {
-            voice = android.speech.tts.TextToSpeech(service) { status ->
-                main.post { if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                    voice?.language = java.util.Locale.forLanguageTag("ar-EG")
-                    overlay.status("الصوت جاهز — اضغط اسمع الرد")
-                } else overlay.status("الصوت غير متاح؛ ثبّت صوت عربي من إعدادات الهاتف") }
-            }
-            return
-        }
-        val lang = voice?.setLanguage(java.util.Locale.forLanguageTag("ar-EG")) ?: -1
-        if (lang < 0) { overlay.status("نزّل صوت عربي من إعدادات تحويل النص إلى كلام"); return }
-        voice?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "arabic-reply")
-    }
+    private fun speak(text: String) { chat.speak(text, "screen") }
 }

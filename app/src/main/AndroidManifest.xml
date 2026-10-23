@@ -42,6 +42,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".arabic.ArabicSettingsActivity" android:exported="false"
+            android:theme="@style/Theme.Mosaedak" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".arabic.ArabicVoiceActivity" android:exported="false"
             android:theme="@style/Theme.Mosaedak" android:excludeFromRecents="true" />
 

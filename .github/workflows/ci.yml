@@ -31,6 +31,22 @@ jobs:
       - name: Unit tests and lint
         run: bash gradlew testDebugUnitTest lintDebug
 
+      - name: Print generated UI previews for review
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          for name in ("home-390.png", "approval-360.png", "chat-360.png"):
+              path = Path("app/build/screenshots/arabic") / name
+              if path.is_file():
+                  print("JARVIS_PREVIEW_BEGIN " + name)
+                  encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+                  for pos in range(0, len(encoded), 4096):
+                      print(encoded[pos:pos + 4096])
+                  print("JARVIS_PREVIEW_END")
+          PY
+
       - name: Build APK
         run: bash gradlew assembleDebug
 

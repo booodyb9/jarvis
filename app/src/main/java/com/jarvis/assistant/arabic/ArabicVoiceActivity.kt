@@ -60,7 +60,14 @@ class ArabicVoiceActivity : AppCompatActivity(), RecognitionListener {
         val text = heard.trim()
         if (text.isBlank()) { transcript.text = "مسمعتش كلام واضح. جرّب تاني."; return }
         finish()
-        JarvisAccessibilityService.instance?.arabic?.reviewVoice(text)
+        when (intent.getStringExtra(EXTRA_DESTINATION) ?: DEST_SCREEN) {
+            DEST_HOME -> ChatConversation.get(this).reviewDraft(text)
+            DEST_CHAT_OVERLAY -> {
+                ChatConversation.get(this).reviewDraft(text)
+                JarvisAccessibilityService.instance?.arabic?.openChat()
+            }
+            else -> JarvisAccessibilityService.instance?.arabic?.reviewVoice(text)
+        }
     }
     override fun onError(error: Int) { transcript.text = "التسجيل وقف. جرّب تاني أو استخدم الكتابة." }
     override fun onBeginningOfSpeech() = Unit
@@ -70,5 +77,10 @@ class ArabicVoiceActivity : AppCompatActivity(), RecognitionListener {
     override fun onEvent(eventType: Int, params: Bundle?) = Unit
     override fun onStop() { cancelled = true; recognizer?.cancel(); super.onStop() }
     override fun onDestroy() { recognizer?.destroy(); if (current === this) current = null; super.onDestroy() }
-    companion object { var current: ArabicVoiceActivity? = null; private set }
+    companion object {
+        const val EXTRA_DESTINATION = "voice_destination"
+        const val DEST_HOME = "home"
+        const val DEST_CHAT_OVERLAY = "chat_overlay"
+        const val DEST_SCREEN = "screen"
+        var current: ArabicVoiceActivity? = null; private set }
 }

@@ -2,6 +2,8 @@ package com.jarvis.assistant.arabic
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.*
+import android.content.Intent
+import android.os.Build
 import android.view.*
 import android.view.inputmethod.InputMethodManager
 import android.widget.*
@@ -22,6 +24,17 @@ class AssistantOverlay(private val service: AccessibilityService) {
     private var cachedInput = ""
     private var cachedStatus = "أهلًا! تحب أساعدك في إيه؟"
     private var busy = false
+    private var screenMode = false
+    val isChat get() = !screenMode
+    private var chatPage: ConversationView? = null
+    private var screenPage: LinearLayout? = null
+    private var screenScroll: ScrollView? = null
+    private var chatTab: Button? = null
+    private var screenTab: Button? = null
+    private var panelStatus: TextView? = null
+    private var panelTitle: TextView? = null
+    private var compactPanel = false
+    private var descriptionScroll: ScrollView? = null
     private val prefs = service.getSharedPreferences("arabic_overlay", 0)
     var onSend: (String) -> Unit = {}
     var onTalk: () -> Unit = {}
@@ -31,6 +44,7 @@ class AssistantOverlay(private val service: AccessibilityService) {
     var onExecute: () -> Unit = {}
     var onGuide: () -> Unit = {}
     var onClose: () -> Unit = {}
+    var onLeaveScreen: () -> Unit = {}
 
     private fun dp(n: Int) = GlassUi.dp(service, n)
     private fun params(width: Int, height: Int, focus: Boolean = false) = WindowManager.LayoutParams(
@@ -73,63 +87,164 @@ class AssistantOverlay(private val service: AccessibilityService) {
         runCatching { wm.addView(robot, p); bubble = robot }
     }
 
-    fun open() {
-        if (panel != null) return
-        showBubble()
-        val root = GlassUi.column(service).apply { background = GlassUi.bg(radius = dp(28).toFloat()); elevation = dp(12).toFloat() }
-        val scroll = ScrollView(service).apply { isFillViewport = false; addView(root) }
-        val head = LinearLayout(service).apply { gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
-        head.addView(RobotView(service), LinearLayout.LayoutParams(dp(46), dp(46)))
-        head.addView(GlassUi.text(service, "مساعدك", 23f), LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
-        head.addView(GlassUi.button(service, "×") { onClose() }, LinearLayout.LayoutParams(dp(48), dp(48)))
-        root.addView(head)
-        val tools = LinearLayout(service).apply { layoutDirection = View.LAYOUT_DIRECTION_RTL }
-        listOf("اتكلم" to onTalk, "اكتب" to { input?.requestFocus(); input?.let { service.getSystemService(InputMethodManager::class.java).showSoftInput(it, InputMethodManager.SHOW_IMPLICIT) }; Unit },
-            "حدد مكان" to onSelect, "إيقاف" to onStop).forEach { (label, action) ->
-            tools.addView(GlassUi.button(service, label, stop = label == "إيقاف", action = action), LinearLayout.LayoutParams(0, dp(58), 1f).apply { setMargins(dp(2), dp(6), dp(2), dp(6)) })
-        }
-        root.addView(tools)
-        proposal = GlassUi.column(service).apply { visibility = View.GONE; background = GlassUi.bg(0xFFE4F6F7.toInt(), dp(18).toFloat()) }
-        root.addView(proposal)
-        reply = GlassUi.text(service, cachedStatus).also { root.addView(it) }
-        editor = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
-        input = GlassUi.field(service, "اكتب طلبك أو سؤالك…").apply { setText(cachedInput) }
-        editor?.addView(input)
-        editor?.addView(GlassUi.text(service, "راجع كلامك قبل الإرسال", 14f, GlassUi.MUTED))
-        editor?.addView(GlassUi.button(service, "إرسال", true) { onSend(input?.text?.toString().orEmpty()) })
-        root.addView(editor)
-        root.addView(GlassUi.button(service, "اسمع الرد") { onSpeak() })
-        root.addView(GlassUi.button(service, "إيقاف", stop = true) { onStop() })
-        val m = service.resources.displayMetrics
-        val p = params(min(m.widthPixels - dp(24), dp(400)), (m.heightPixels * 0.68f).toInt(), true).apply {
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = dp(28)
-        }
-        runCatching { wm.addView(scroll, p); panel = scroll; setBusy(busy) }
+    fun openChat() { screenMode = false; open(); renderMode() }
+    fun openScreen() { screenMode = true; open(); renderMode() }
+
+    private fun renderMode() {
+        chatPage?.visibility = if (screenMode) View.GONE else View.VISIBLE
+        screenPage?.visibility = if (screenMode) View.VISIBLE else View.GONE
+        chatTab?.setTextColor(if (screenMode) GlassUi.MUTED else GlassUi.TEAL)
+        screenTab?.setTextColor(if (screenMode) GlassUi.TEAL else GlassUi.MUTED)
+        panelStatus?.text = if (screenMode) "كل خطوة بموافقتك" else "صوت وكتابة، في نفس المحادثة"
+        panelTitle?.text = if (compactPanel) { if (screenMode) "الشاشة ▾" else "دردشة ▾" } else "مساعدك"
     }
 
-    fun status(text: String) { cachedStatus = text; reply?.text = text }
+    fun open() {
+        if (panel != null) { renderMode(); return }
+        showBubble()
+        var headerView: View? = null
+        var tabsView: View? = null
+        val root = object : LinearLayout(service) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val height = MeasureSpec.getSize(heightMeasureSpec)
+                compactPanel = height < dp(420)
+                panelStatus?.visibility = if (compactPanel) View.GONE else View.VISIBLE
+                tabsView?.visibility = if (height < dp(300)) View.GONE else View.VISIBLE
+                headerView?.visibility = if (height < dp(160)) View.GONE else View.VISIBLE
+                setPadding(dp(12), dp(if (compactPanel) 6 else 16), dp(12), dp(if (compactPanel) 6 else 16))
+                panelTitle?.let {
+                    val label = if (compactPanel) { if (screenMode) "الشاشة ▾" else "دردشة ▾" } else "مساعدك"
+                    if (it.text.toString() != label) it.text = label
+                    it.textSize = if (compactPanel) 16f else 21f
+                }
+                proposal?.setPadding(dp(8), dp(if (compactPanel) 6 else 16), dp(8), dp(if (compactPanel) 6 else 16))
+                descriptionScroll?.layoutParams?.height = dp(if (height < dp(300)) 56 else if (compactPanel) 84 else 112)
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+        }.apply {
+            orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = GlassUi.bg(radius = dp(28).toFloat()); elevation = dp(12).toFloat()
+        }
+        val head = LinearLayout(service).apply { gravity = Gravity.CENTER_VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        head.addView(RobotView(service), LinearLayout.LayoutParams(dp(40), dp(40)))
+        val title = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
+        panelTitle = GlassUi.text(service, "مساعدك", 21f).apply {
+            contentDescription = "تبديل بين الدردشة ومساعدة الشاشة"
+            setOnClickListener { if (screenMode) onLeaveScreen(); screenMode = !screenMode; renderMode() }
+        }
+        title.addView(panelTitle)
+        panelStatus = GlassUi.text(service, "", 11f, GlassUi.MUTED).also { title.addView(it) }
+        head.addView(title, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
+        head.addView(GlassUi.button(service, "↗") {
+            onClose()
+            service.startActivity(Intent(service, ArabicHomeActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        }.apply { contentDescription = "افتح الدردشة في التطبيق" }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        head.addView(GlassUi.button(service, "×") { onClose() }.apply { contentDescription = "تصغير الفقاعة" },
+            LinearLayout.LayoutParams(dp(48), dp(48)))
+        headerView = head
+        root.addView(head)
+        val tabs = LinearLayout(service)
+        chatTab = GlassUi.button(service, "دردشة") { if (screenMode) onLeaveScreen(); screenMode = false; renderMode() }
+        screenTab = GlassUi.button(service, "الشاشة") { screenMode = true; renderMode() }
+        tabs.addView(chatTab, LinearLayout.LayoutParams(0, dp(48), 1f))
+        tabs.addView(screenTab, LinearLayout.LayoutParams(0, dp(48), 1f))
+        tabsView = tabs
+        root.addView(tabs)
+        val body = FrameLayout(service)
+        chatPage = ConversationView(service).apply {
+            onTalk = { this@AssistantOverlay.onTalk() }
+            onScreen = { screenMode = true; renderMode() }
+        }
+        body.addView(chatPage, FrameLayout.LayoutParams(-1, -1))
+        val screenRoot = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL; layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        screenPage = screenRoot
+        val tools = LinearLayout(service).apply { layoutDirection = View.LAYOUT_DIRECTION_RTL }
+        listOf("اتكلم" to onTalk, "حدد مكان" to onSelect, "إيقاف" to onStop).forEach { (label, action) ->
+            tools.addView(GlassUi.button(service, label, stop = label == "إيقاف", action = action),
+                LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(dp(2), dp(3), dp(2), dp(3)) })
+        }
+        screenRoot.addView(tools)
+        reply = GlassUi.text(service, cachedStatus)
+        screenScroll = ScrollView(service).apply { addView(reply) }
+        screenRoot.addView(screenScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        proposal = GlassUi.column(service).apply { visibility = View.GONE; background = GlassUi.bg(0xFFE4F6F7.toInt(), dp(18).toFloat()) }
+        screenRoot.addView(proposal)
+        editor = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
+        input = GlassUi.field(service, "اكتب طلبك أو سؤالك عن الشاشة…").apply { setText(cachedInput); maxLines = 3 }
+        editor?.addView(input)
+        val sendRow = LinearLayout(service)
+        sendRow.addView(GlassUi.button(service, "إرسال", true) { onSend(input?.text?.toString().orEmpty()) },
+            LinearLayout.LayoutParams(0, dp(48), 1f))
+        sendRow.addView(GlassUi.button(service, "اسمع الرد") { onSpeak() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        editor?.addView(sendRow)
+        screenRoot.addView(editor)
+        body.addView(screenRoot, FrameLayout.LayoutParams(-1, -1))
+        root.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
+        val m = service.resources.displayMetrics
+        val normalHeight = min(dp(640), (m.heightPixels * 0.80f).toInt())
+        val p = params(min(m.widthPixels - dp(24), dp(400)), normalHeight, true).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = dp(12)
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            root.setOnApplyWindowInsetsListener { _, insets ->
+                val bottom = insets.getInsets(WindowInsets.Type.ime() or WindowInsets.Type.systemBars()).bottom
+                val available = (m.heightPixels - bottom - dp(48)).coerceAtLeast(dp(120))
+                val height = min(normalHeight, available)
+                if (p.height != height) { p.height = height; if (panel === root) runCatching { wm.updateViewLayout(root, p) } }
+                insets
+            }
+        }
+        if (Build.VERSION.SDK_INT < 30) {
+            root.viewTreeObserver.addOnGlobalLayoutListener {
+                val frame = Rect()
+                root.getWindowVisibleDisplayFrame(frame)
+                if (frame.height() > 0) {
+                    val height = min(normalHeight, (frame.bottom - dp(48)).coerceAtLeast(dp(120)))
+                    if (p.height != height && panel === root) {
+                        p.height = height
+                        runCatching { wm.updateViewLayout(root, p) }
+                    }
+                }
+            }
+        }
+        runCatching { wm.addView(root, p); panel = root; setBusy(busy); renderMode() }
+    }
+
+    fun status(text: String) { cachedStatus = text; reply?.text = text; bubble?.contentDescription = "مساعدك — " + text }
     fun setInput(text: String) { cachedInput = text; input?.setText(text) }
-    fun setBusy(value: Boolean) { busy = value; editor?.visibility = if (value) View.GONE else View.VISIBLE }
-    fun ask(text: String) { open(); status(text); editor?.visibility = View.VISIBLE }
+    fun setBusy(value: Boolean) {
+        busy = value
+        if (value) input?.let {
+            it.clearFocus()
+            service.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(it.windowToken, 0)
+        }
+        editor?.visibility = if (value) View.GONE else View.VISIBLE
+    }
+    fun ask(text: String) { openScreen(); status(text); editor?.visibility = View.VISIBLE }
     fun propose(text: String, bounds: Rect?) {
-        open(); status("بانتظار موافقتك")
+        openScreen(); status("بانتظار موافقتك")
         proposal?.apply {
             removeAllViews(); visibility = View.VISIBLE
-            addView(GlassUi.text(service, text, 18f))
-            addView(GlassUi.text(service, "موافقتك للفعل المعروض فقط — تنتهي بعد دقيقة", 14f, GlassUi.MUTED))
+            val description = LinearLayout(service).apply { orientation = LinearLayout.VERTICAL }
+            description.addView(GlassUi.text(service, text, 18f))
+            description.addView(GlassUi.text(service, "موافقتك للفعل المعروض فقط — تنتهي بعد دقيقة", 13f, GlassUi.MUTED))
+            descriptionScroll = ScrollView(service).apply { addView(description) }
+            addView(descriptionScroll, LinearLayout.LayoutParams(-1, dp(112)))
             val row = LinearLayout(service).apply { layoutDirection = View.LAYOUT_DIRECTION_RTL }
             row.addView(GlassUi.button(service, "نفّذ مرة", true) { onExecute() }.apply { filterTouchesWhenObscured = true }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(4) })
             row.addView(GlassUi.button(service, "ورّيني") { onGuide() }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(row)
         }
         bounds?.let { showMark(it) }
-        (panel as? ScrollView)?.smoothScrollTo(0, 0)
+        screenScroll?.smoothScrollTo(0, 0)
     }
-    fun clearProposal() { proposal?.removeAllViews(); proposal?.visibility = View.GONE; clearHighlights() }
+    fun clearProposal() { proposal?.removeAllViews(); proposal?.visibility = View.GONE; descriptionScroll = null; clearHighlights() }
     fun guide(text: String) { status(text); collapse() }
     fun collapse() {
         cachedInput = input?.text?.toString() ?: cachedInput
         panel?.let { runCatching { wm.removeView(it) } }; panel = null; input = null; reply = null; editor = null; proposal = null
+        chatPage = null; screenPage = null; screenScroll = null; chatTab = null; screenTab = null; panelStatus = null; panelTitle = null; descriptionScroll = null
     }
     fun clearHighlights() {
         marker?.let { runCatching { wm.removeView(it) } }; marker = null

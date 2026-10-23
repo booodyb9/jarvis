@@ -77,7 +77,7 @@ class OpenAiCompatibleSession(
 
         val json = http.newCall(request).execute().use { resp ->
             val text = resp.body?.string().orEmpty()
-            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} from ${config.preset.label}: ${text.take(500)}")
+            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} from ${config.preset.label}")
             JSONObject(text)
         }
 

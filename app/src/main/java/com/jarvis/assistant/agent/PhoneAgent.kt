@@ -162,8 +162,7 @@ class PhoneAgent(private val settings: Settings, private val host: AgentHost) {
                         if (host.isCancelled) throw IllegalStateException("تم الإيقاف")
                         val (jpeg, scale) = a11y.screenshot()
                         image = jpeg
-                        "Screenshot attached. It is scaled by $scale: to tap something you see in it, divide its " +
-                            "pixel coordinates by $scale and call tap_point with the result."
+                        "Screenshot attached (scale $scale). Explain its contents. Coordinate actions are disabled; ask the user to select any inaccessible target."
                     }
                 }
                 "ask_user" -> { settleMs = 0; host.ask(a.getString("question"))?.let { "The user said: \"$it\"" } ?: "The user did not answer." }
@@ -231,22 +230,17 @@ ${if (notes.isNotEmpty()) "\nThings the user has told you about themselves:\n$no
         add(ToolSpec("long_press", "Long-press an on-screen element.", obj("element_id" to int("Element id from the latest screen."), required = listOf("element_id"))))
         add(ToolSpec(
             "type_text",
-            "Replace the text in a text field. Omit element_id to type into the currently focused field.",
+            "Replace the text in a specific visible text field. Submission needs a separate approved action.",
             obj(
                 "text" to str("The full text the field should contain."),
                 "element_id" to int("Id of the text field."),
-                "press_enter" to bool("Press the keyboard's enter/search key afterwards. Not reliable for sending chat messages; tap the send button instead."),
-                required = listOf("text"),
+                required = listOf("text", "element_id"),
             )
         ))
         add(ToolSpec(
             "scroll", "Scroll a list or the whole screen. 'down' reveals content further down.",
             obj("direction" to str("Direction to scroll.", listOf("up", "down", "left", "right")), "element_id" to int("Optional id of the list to scroll."), required = listOf("direction"))
         ))
-        add(ToolSpec("tap_point", "Tap at exact screen pixel coordinates. Prefer tap with an element_id when possible.",
-            obj("x" to int("X in screen pixels."), "y" to int("Y in screen pixels."), required = listOf("x", "y"))))
-        add(ToolSpec("swipe", "Swipe between two points in screen pixels.",
-            obj("x1" to int("Start x"), "y1" to int("Start y"), "x2" to int("End x"), "y2" to int("End y"), "duration_ms" to int("Default 400"), required = listOf("x1", "y1", "x2", "y2"))))
         add(ToolSpec("press_key", "Press a system button.",
             obj("key" to str("Which button.", listOf("back", "home", "recents", "notifications", "quick_settings")), required = listOf("key"))))
         add(ToolSpec("open_app", "Launch an installed app by its name, e.g. 'WhatsApp', 'Settings', 'Chrome'.",

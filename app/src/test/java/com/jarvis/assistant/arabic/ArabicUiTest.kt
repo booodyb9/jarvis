@@ -26,6 +26,48 @@ import java.io.File
 class ArabicUiTest {
     private fun roots(s: JarvisAccessibilityService) = (shadowOf(s.getSystemService(WindowManager::class.java)) as ShadowWindowManagerImpl).views.toList()
     private fun texts(v: View): List<TextView> = if (v is ViewGroup) (0 until v.childCount).flatMap { texts(v.getChildAt(it)) } else listOfNotNull(v as? TextView)
+    private fun pendingAction(service: JarvisAccessibilityService, assistant: ArabicAssistant, hits: java.util.concurrent.atomic.AtomicInteger): Pair<Thread, java.util.concurrent.atomic.AtomicReference<String?>> {
+        service.readScreen()
+        val error = java.util.concurrent.atomic.AtomicReference<String?>()
+        val method = ArabicAssistant::class.java.getDeclaredMethod("awaitApproval", java.lang.Long.TYPE, ToolCall::class.java, kotlin.jvm.functions.Function0::class.java).apply { isAccessible = true }
+        val thread = Thread {
+            try { method.invoke(assistant, 0L, ToolCall("one", "press_key", JSONObject().put("key", "back")), { hits.incrementAndGet(); "back dispatched" }) }
+            catch (e: Exception) { error.set(e.cause?.message ?: e.message) }
+        }
+        thread.start()
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(3)
+        while (System.nanoTime() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (roots(service).flatMap { texts(it) }.any { it.text == "نفّذ مرة" }) break
+            Thread.yield()
+        }
+        assertTrue("Native consent card must be displayed", roots(service).flatMap { texts(it) }.any { it.text == "نفّذ مرة" })
+        assertEquals("No action before approval", 0, hits.get())
+        return thread to error
+    }
+    @Test fun nativeControllerExecutesOneApprovedActionOnly() {
+        val service = Robolectric.buildService(JarvisAccessibilityService::class.java).create().get()
+        val assistant = service.arabic
+        val hits = java.util.concurrent.atomic.AtomicInteger()
+        val (thread, error) = pendingAction(service, assistant, hits)
+        val button = roots(service).flatMap { texts(it) }.first { it.text == "نفّذ مرة" }
+        button.performClick(); button.performClick(); thread.join(2000)
+        assertFalse(thread.isAlive); assertNull(error.get()); assertEquals(1, hits.get())
+        assistant.close()
+    }
+    @Test fun stopAndScreenRevisionChangesDenyPendingAction() {
+        for (cancelByStop in listOf(false, true)) {
+            val service = Robolectric.buildService(JarvisAccessibilityService::class.java).create().get()
+            val assistant = service.arabic
+            val hits = java.util.concurrent.atomic.AtomicInteger()
+            val (thread, error) = pendingAction(service, assistant, hits)
+            val button = roots(service).flatMap { texts(it) }.first { it.text == "نفّذ مرة" }
+            if (cancelByStop) assistant.stop() else service.onAccessibilityEvent(android.view.accessibility.AccessibilityEvent.obtain(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED).apply { packageName = "other.app" })
+            button.performClick(); thread.join(2000)
+            assertFalse(thread.isAlive); assertEquals(0, hits.get()); assertNotNull(error.get())
+            assistant.close()
+        }
+    }
     @Test fun oldHostCannotExecuteWithoutNativeConsent() {
         val host = object : AgentHost {
             override fun status(text: String) = Unit

@@ -53,6 +53,10 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
     }
     override fun onInterrupt() { arabic.stop() }
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        arabic.configurationChanged()
+    }
 
     override fun onDestroy() {
         runCatching { island.hide() }
@@ -146,19 +150,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             if (target != null && target.performAction(action)) return "Scrolled $direction."
         }
         return "No unambiguous scrollable element. Ask the user to select a list or scroll manually."
-        /* Coordinate fallback is intentionally unavailable in the consent-based assistant.
-        val m = resources.displayMetrics
-        val cx = m.widthPixels / 2f
-        val cy = m.heightPixels / 2f
-        val dy = m.heightPixels * 0.3f
-        val dx = m.widthPixels * 0.35f
-        val ok = when (direction) {
-            "down" -> swipe(cx, cy + dy, cx, cy - dy, 350)
-            "up" -> swipe(cx, cy - dy, cx, cy + dy, 350)
-            "right" -> swipe(cx + dx, cy, cx - dx, cy, 350)
-            else -> swipe(cx - dx, cy, cx + dx, cy, 350)
-        }
-        return if (ok) "Swiped to scroll $direction." else "Scroll failed." */
+
     }
 
     fun tapAt(x: Float, y: Float): Boolean = gesture(path(x, y), 60)

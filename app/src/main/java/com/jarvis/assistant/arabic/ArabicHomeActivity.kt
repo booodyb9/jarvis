@@ -105,8 +105,9 @@ class ArabicHomeActivity : AppCompatActivity() {
                 if (url == null || !url.isHttps || url.username.isNotBlank() || url.password.isNotBlank() || url.query != null || url.fragment != null || model.text.isBlank()) {
                     error.text = "أدخل رابط HTTPS صحيح واسم نموذج يدعم الأدوات"; return@setOnClickListener
                 }
-                settings.saveProfile(ModelProfile(id = current?.id ?: java.util.UUID.randomUUID().toString(), name = "نموذجي", providerId = "custom", baseUrl = url.toString().trimEnd('/'), apiKey = key.text.toString().trim(), model = model.text.toString().trim()))
-                settings.primaryId = settings.profiles().lastOrNull { it.model == model.text.toString().trim() }?.id
+                val profile = ModelProfile(id = current?.id ?: java.util.UUID.randomUUID().toString(), name = "نموذجي", providerId = "custom", baseUrl = url.toString().trimEnd('/'), apiKey = key.text.toString().trim(), model = model.text.toString().trim())
+                settings.saveProfile(profile)
+                settings.primaryId = profile.id
                 state.text = "تم حفظ النموذج. جرّب اختبار الاتصال."; dialog.dismiss()
             }
         }

@@ -64,7 +64,13 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
         overlay.showBubble()
     }
     fun disable() { enabled = false; stop(); overlay.hide() }
+    fun configurationChanged() {
+        val wasEnabled = enabled
+        stop(); overlay.hide()
+        if (wasEnabled) overlay.showBubble()
+    }
     fun reviewVoice(text: String) {
+        if (closed || !service.getSharedPreferences("arabic_consent", 0).getBoolean("screen_text", false)) return
         enable(); overlay.open(); overlay.setInput(text)
         overlay.status("راجع الكلام، وبعدها اضغط إرسال")
     }
@@ -137,6 +143,8 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     }
 
     private fun awaitApproval(id: Long, call: ToolCall, action: () -> String): String {
+        if (call.name == "look_at_screen") require(Settings(service).allowScreenshots) { "التصوير متوقف من الإعدادات" }
+        if (call.name == "scroll") require(call.arguments.optString("direction", "down") in setOf("up", "down", "left", "right")) { "اتجاه غير معروف" }
         val observed = service.lastSnapshot() ?: error("مفيش شاشة مقروءة")
         val proof = service.observedProof
         val revision = service.observedRevision
@@ -148,7 +156,14 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
         if (call.name in setOf("tap", "long_press", "type_text")) require(!label.isNullOrBlank()) { "مش قادر أحدد الزر بثقة. حدده بنفسك." }
         require(!service.getSystemService(KeyguardManager::class.java).isKeyguardLocked) { "افتح قفل الهاتف الأول" }
         val description = describe(call, label)
-        val p = Pending(id, ConsentTicket(proof, revision, SystemClock.elapsedRealtime() + 60_000), proof, revision, action)
+        val approvedAction: () -> String = {
+            if (call.name == "look_at_screen") {
+                check(Settings(service).allowScreenshots) { "التصوير اتوقف من الإعدادات" }
+                overlay.collapse()
+            }
+            action()
+        }
+        val p = Pending(id, ConsentTicket(proof, revision, SystemClock.elapsedRealtime() + 60_000), proof, revision, approvedAction)
         main.post {
             if (id != epoch.get() || closed) { p.error = "تم الإيقاف"; p.result.countDown(); return@post }
             val fresh = ScreenReader.capture(service)
@@ -195,7 +210,7 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
     }
 
     private fun selectRegion() {
-        if (busy) { overlay.status("أوقف الطلب الحالي الأول عشان تحدد مكان جديد"); return }
+        if (busy && question == null) { overlay.status("أوقف الطلب الحالي الأول عشان تحدد مكان جديد"); return }
         overlay.collapse()
         val id = epoch.get()
         main.postDelayed({
@@ -209,6 +224,12 @@ class ArabicAssistant(private val service: JarvisAccessibilityService) {
             }.mapNotNull { it.text?.toString()?.takeIf(String::isNotBlank) ?: it.contentDescription?.toString() }.distinct()
             selection = selected.joinToString("، ").take(2500)
             overlay.open()
+            if (selection.isNotBlank() && question != null) {
+                overlay.setInput("أقصد المكان ده: $selection")
+                overlay.ask("راجع التحديد واضغط إرسال: ${selection.take(180)}")
+                selection = ""
+                return@select
+            }
             overlay.status(if (selection.isBlank()) "المكان ده مش بيعرض نص قابل للقراءة. تقدر تفعّل الصور من الإعدادات؛ مش هخمن زر." else "تم تحديد: ${selection.take(180)}. اكتب سؤالك عنه.")
         }
         }, 250)

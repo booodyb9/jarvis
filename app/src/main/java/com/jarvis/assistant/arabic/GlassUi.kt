@@ -8,7 +8,7 @@ import android.widget.*
 
 object GlassUi {
     const val INK = 0xFF102B49.toInt()
-    const val TEAL = 0xFF008D94.toInt()
+    const val TEAL = 0xFF006F78.toInt()
     const val MUTED = 0xFF536E83.toInt()
     const val RED = 0xFFB43240.toInt()
     fun dp(c: Context, n: Int) = (n * c.resources.displayMetrics.density).toInt()
@@ -26,7 +26,8 @@ object GlassUi {
     }
     fun button(c: Context, label: String, primary: Boolean = false, stop: Boolean = false, action: () -> Unit) = Button(c).apply {
         text = label; textSize = 16f; isAllCaps = false
-        minHeight = dp(c, 50); minimumWidth = 0; minWidth = 0
+        minHeight = dp(c, 48); minimumWidth = 0; minWidth = 0
+        setPadding(dp(c, 8), 0, dp(c, 8), 0)
         setTextColor(if (stop) RED else if (primary) Color.WHITE else INK)
         backgroundTintList = null
         background = bg(if (primary) TEAL else if (stop) 0xFFFFF1F2.toInt() else 0xFFEAF5FA.toInt(), dp(c, 16).toFloat())

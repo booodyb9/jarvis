@@ -15,3 +15,17 @@
 - Fix pass: separate explicit global Stop from screen-service teardown; conversation-clear listeners revoke native tasks; compact measured layouts reserve composer/action space; approval descriptions scroll in a bounded area; speech uses bounded QUEUE_ADD chunks.
 - Final: Ruling: Physical Honor IME placement, engine quality and battery behavior remain unverified because no device is attached; deliver automated evidence and require physical testing before release.
 - UI verification workaround: focused CI step prints only generated fixture screenshot PNGs, enabling inspection without the unavailable managed filesystem. No credentials or real user screenshots are included.
+
+- Final GREEN: CI 39981378011 at code commit 6b3a4e425345f73b1d1efd612a76eabbda94abbe passed the full suite (same 79 tests as RED, no tests removed), lintDebug and assembleDebug.
+- Task 1: complete — shared local chat, no-tool transport, context/cancellation/fallback tests GREEN.
+- Task 2: complete — main conversation and separate model settings, RTL/compact UI tests GREEN.
+- Task 3: complete — shared bubble, reviewed voice destinations, first/long TTS replies and preserved native consent tests GREEN.
+- Task 4: complete — full CI GREEN; generated home-390.png, approval-360.png and chat-360.png inspected. APK artifact: 12512824330; screenshots: 12512729421; validation reports: 12514275529.
+- Final: fixed rotation cancellation — serviceRotationDoesNotCancelAnOrdinaryChatRequest RED→GREEN.
+- Final: fixed screen response/approval surviving clear — clearingConversationCannotBeRepopulatedByAnOlderScreenResult and clearingConversationRevokesAnOutstandingNativeApproval RED→GREEN.
+- Final: fixed clipped composer/actions — homeComposerFitsALandscapeWindowWithKeyboard and bubbleChatComposerFitsLandscapeAndKeyboardHeight RED→GREEN.
+- Final: fixed clipped approval actions — longApprovalKeepsBothActionsReachableWithoutDroppingTheDescription RED→GREEN.
+- Final: fixed long TTS replies — longRepliesAreSplitIntoLegalSpeechRequestsWithoutLosingText RED→GREEN.
+- All seven review regression tests passed with the full suite. No second reviewer dispatched; fix verification uses the regression tests.
+- No deferred minor findings remain. Physical-device testing remains the explicit release limitation.
+- This completion record only changes documentation after the tested code commit; no production/test/CI code changes.
